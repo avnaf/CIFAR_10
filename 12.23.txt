@@ -1,0 +1,142 @@
+# ============================================================================================================================================= #
+#Imports
+import cv2
+import numpy as np
+# ============================================================================================================================================= #
+
+# ============================================================================================================================================= #
+#Globals:
+batch_dir = r'C:\Users\Naftalis\Desktop\Computer Vision\Project\cifar-10-batches-py'
+data_1 = batch_dir + '\\' + r'data_batch_1'
+# ============================================================================================================================================= #
+
+# ============================================================================================================================================= #
+# dict = {data : lables}
+# data = 10000*3072 numpy array of uint8
+# 	Each row of the array stores a 32x32 colour image
+#	The first 1024 entries contain the red channel values, the next 1024 the green, and the final 1024 the blue
+# 	The image is stored in row-major order, so that the first 32 entries of the array are the red channel values of the first row of the image
+# lables =  list of 10000 numbers in the range 0-9
+#	The number at index i indicates the label of the ith image in the array data
+# ============================================================================================================================================= #
+# The dataset contains another file, called batches.meta. It too contains a Python dictionary object. It has the following entries:
+#	label_names = 10-element list which gives meaningful names to the numeric labels in the labels array described above.
+#	For example, label_names[0] == "airplane", label_names[1] == "automobile", etc.
+# ============================================================================================================================================= #
+def unpickle(file, print_msg = False):
+    if print_msg:
+        print 'unpicking training set images'
+        
+    import cPickle
+    with open(file, 'rb') as fo:
+        dict = cPickle.load(fo)
+    return dict
+
+# ============================================================================================================================================= #
+# input: array of 3072 elements
+# ============================================================================================================================================= #
+def img_2_RGB_cv2_format(im, print_msg = False):
+    if print_msg:
+        print 'reshaping image to RGB format (32*32*3)'
+        
+    mat = np.zeros((32,32,3), np.uint8)
+    for i in range(32*32*3):
+        mat[(i % (32*32)) // 32][i % 32][i // (32*32)] = im[i]
+    return mat
+
+# ============================================================================================================================================= #
+# input: image list, heading (optional), delay [mili-seconds] (optional)
+# ============================================================================================================================================= #
+def show_img(im, heading = '', delay = 1000):
+    for i in im:
+        cv2.imshow(heading, i) 
+        cv2.waitKey(delay)
+        cv2.destroyAllWindows()
+
+# ============================================================================================================================================= #
+# input: 2 images, threshold [0.0 : 1.0] (how tight should the matches be)
+# ============================================================================================================================================= #
+def bf_matcher(im1, im2, th = 0.75):
+    pass
+    # TO DO
+    # move the bf code into this function
+    # try the 2nd method from https://docs.opencv.org/3.1.0/da/df5/tutorial_py_sift_intro.html
+    # mission - do SIFT on all images
+
+
+def my_main():
+    d = unpickle(data_1)
+    
+    print 'testing'
+    
+    images = d.values()[0]
+    labels = d.values()[1]
+    print labels
+
+    print 'end testing'
+    #return
+    print 'this is working'
+    data = d.itervalues().next().reshape((10000,32*32*3))
+    
+    img1 = img_2_RGB_cv2_format(images[0])
+    img2 = img_2_RGB_cv2_format(images[1])
+    
+    
+    show_img([img1,img2], delay = 250)
+    
+    sift = cv2.xfeatures2d.SIFT_create()
+    kp1, des1 = sift.detectAndCompute(img1,None)
+    kp2, des2 = sift.detectAndCompute(img2,None)
+    
+    bf = cv2.BFMatcher()
+    matches = bf.knnMatch(des1,des2, k=2)
+# ============================================================================================================================================= #
+    # Apply ratio test
+    good = []
+    for m,n in matches:
+        if m.distance < 0.99*n.distance:
+            good.append([m])
+            
+    img3 = np.array((32,32,3))
+    print good
+    img3 = cv2.drawMatchesKnn(img1,kp1,img2,kp2,good,img3,flags=2)
+    
+    from matplotlib import pyplot as plt
+    plt.imshow(img3),plt.show()
+# ============================================================================================================================================= #
+            
+    print matches
+    
+# ============================================================================================================================================= #
+    del(images)
+    del(labels)
+    del(data)
+#    for i in range(10):
+ #       show_img(img_2_RGB_cv2_format(training_set_images[i]), delay = 400)
+
+    #print 'RGB images -> grayscale'
+    
+    
+    
+    
+    
+my_main()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
