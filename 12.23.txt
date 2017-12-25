@@ -56,22 +56,22 @@ def show_img(i, heading = '', delay = 600):
 def my_main():
     d = unpickle(data_1)
 
-    images = d.values()[0]
-    labels = d.values()[1]
+    images = d.values()[0][:20]
+    labels = d.values()[1][:20]
         
     sift = cv2.xfeatures2d.SIFT_create()
     
-    des = [[] for i in range(10)]
+    des = []
+    
 
     for im in zip(images, labels):
         # des appends K (variable number) of 128-dim descriptors
-        des[im[1]].append(sift.detectAndCompute(img_2_RGB_cv2_format(im[0]), None))
-
-    import matplotlib.pyplot as plt
-    from matplotlib import style
-    style.use("ggplot")
+        des.append(sift.detectAndCompute(img_2_RGB_cv2_format(im[0]), None)[1])
+        
+    print des
+    
     from sklearn import svm
     clf = svm.SVC()
-    clf.fit(des, [i for i in range(1,11)])
+    clf.fit(des,labels)
+    
 my_main()
-
