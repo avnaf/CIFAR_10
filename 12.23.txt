@@ -52,85 +52,26 @@ def show_img(i, heading = '', delay = 600):
     cv2.waitKey(delay)
     cv2.destroyAllWindows()
 
-# ============================================================================================================================================= #
-# input: 2 images, threshold [0.0 : 1.0] (how tight should the matches be)
-# ============================================================================================================================================= #
-def bf_matcher(im1, im2, th = 0.75):
-    pass
-    # TO DO
-    # move the bf code into this function
-    # try the 2nd method from https://docs.opencv.org/3.1.0/da/df5/tutorial_py_sift_intro.html
-    # mission - do SIFT on all images
-
 
 def my_main():
     d = unpickle(data_1)
-    from matplotlib import pyplot as plt
+
     images = d.values()[0]
     labels = d.values()[1]
-    
-    labeled_images = [[] for i in range(10)]
-    descriptors = [[] for i in range(10)]
-    
-    for i in range(len(images) // 100):
-        labeled_images[labels[i]] += [images[i]]
-    
-    sift = cv2.xfeatures2d.SIFT_create()
-    
-    for label in enumerate(labeled_images):
-        for img in label[1]:
-            kp,des = sift.detectAndCompute(img_2_RGB_cv2_format(img), None)
-            descriptors[label[0]] += [des] #kp are irelevant?
-
-    print descriptors
-    
-    del descriptors
-    del images
-    del labels
-    return
         
     sift = cv2.xfeatures2d.SIFT_create()
-    for i in range(3):
-        im = img_2_RGB_cv2_format(images[i])
-        kp = sift.detect(im, None)
-        im = cv2.drawKeypoints(im,kp,im)
-        cv2.imwrite('sift_keypoints.jpg',im)
-        im=cv2.drawKeypoints(im,kp,im,flags=cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)        
-        plt.imshow(im),plt.show()
-        plt.imshow(img_2_RGB_cv2_format(images[i])),plt.show()
     
-              
+    des = [[] for i in range(10)]
 
-            
-    
+    for im in zip(images, labels):
+        # des appends K (variable number) of 128-dim descriptors
+        des[im[1]].append(sift.detectAndCompute(img_2_RGB_cv2_format(im[0]), None))
 
-
-#    for i in range(10):
- #       show_img(img_2_RGB_cv2_format(training_set_images[i]), delay = 400)
-
-    #print 'RGB images -> grayscale'
-    
-    
-    
-    
-    
+    import matplotlib.pyplot as plt
+    from matplotlib import style
+    style.use("ggplot")
+    from sklearn import svm
+    clf = svm.SVC()
+    clf.fit(des, [i for i in range(1,11)])
 my_main()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
