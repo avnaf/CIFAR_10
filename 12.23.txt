@@ -8,6 +8,12 @@ import numpy as np
 #Globals:
 batch_dir = r'C:\Users\Naftalis\Desktop\Computer Vision\Project\cifar-10-batches-py'
 data_1 = batch_dir + '\\' + r'data_batch_1'
+data_2 = batch_dir + '\\' + r'data_batch_2'
+data_3 = batch_dir + '\\' + r'data_batch_3'
+data_4 = batch_dir + '\\' + r'data_batch_4'
+data_5 = batch_dir + '\\' + r'data_batch_5'
+data_batch = [data_1, data_2, data_3, data_4, data_5]
+test = batch_dir + '\\' + r'test_batch'
 # ============================================================================================================================================= #
 
 # ============================================================================================================================================= #
@@ -35,7 +41,7 @@ def unpickle(file, print_msg = False):
 # ============================================================================================================================================= #
 # input: array of 3072 elements
 # ============================================================================================================================================= #
-def img_2_RGB_cv2_format(im, print_msg = False):
+def img_2_RGB(im, print_msg = False):
     if print_msg:
         print 'reshaping image to RGB format (32*32*3)'
         
@@ -53,25 +59,121 @@ def show_img(i, heading = '', delay = 600):
     cv2.destroyAllWindows()
 
 
-def my_main():
+def my_main(num_of_images_to_check, num_of_des):
+    print '#'*100 
+    print 'using {} descriptors'.format(num_of_des)
     d = unpickle(data_1)
+    tst = unpickle(test)
 
-    images = d.values()[0][:20]
-    labels = d.values()[1][:20]
+    images = d.values()[0][:num_of_images_to_check]
+    labels = d.values()[1][:num_of_images_to_check]
+    
+    tst_images = tst.values()[0][:num_of_images_to_check]
+    tst_labels = tst.values()[1][:num_of_images_to_check]
         
     sift = cv2.xfeatures2d.SIFT_create()
     
-    des = []
+    relevant_sized_descriptors = []
+    relevant_labels = []
     
-
-    for im in zip(images, labels):
-        # des appends K (variable number) of 128-dim descriptors
-        des.append(sift.detectAndCompute(img_2_RGB_cv2_format(im[0]), None)[1])
+    for im,lb in zip(images, labels):
+        im = img_2_RGB(im)
+        old_kp = sift.detect(im, None)
+        kp,ds = sift.compute(im, old_kp)
         
-    print des
+        if ds is not None and len(ds) == num_of_des:
+            #print ds.flatten()
+            relevant_sized_descriptors.append(ds.flatten())
+            relevant_labels.append(lb)
+                
+            
+    X = np.array(relevant_sized_descriptors)
+    #print X.shape , len(relevant_sized_descriptors)
+    #X = X.flatten()
+    y = np.array(relevant_labels)
+    #y = y.flatten()
+    #print y
     
     from sklearn import svm
-    clf = svm.SVC()
-    clf.fit(des,labels)
     
-my_main()
+    clf1 = svm.LinearSVC()
+    clf2 = svm.SVR()
+    clf3 = svm.SVC(kernel='rbf')
+    clf4 = svm.SVC(C=0.01, kernel='poly', degree=3, gamma=2)
+    clf5 = svm.SVC(C=0.01, kernel='poly', degree=4, gamma=2)
+    clf6 = svm.SVC(C=0.05, kernel='poly', degree=3, gamma=2)
+    clf7 = svm.SVC(C=0.05, kernel='poly', degree=4, gamma=2)#best so far
+    clf8 = svm.SVC(C=0.01, kernel='poly', degree=5, gamma=2)
+    clf9 = svm.SVC(C=0.1, kernel='poly', degree=4, gamma=2)
+    clf10 = svm.SVC(C=0.1, kernel='poly', degree=5, gamma=2)
+    clf11 = svm.SVC(C=0.3, kernel='poly', degree=4, gamma=2)
+    clf12 = svm.SVC(C=0.5, kernel='poly', degree=4, gamma=2)
+    clf13 = svm.SVC(C=1.0, kernel='poly', degree=4, gamma=2)
+    clf14 = svm.SVC(C=2.0, kernel='poly', degree=4, gamma=2)
+    
+    
+    clfs = [clf7]
+    
+    for clf in enumerate(clfs):
+        print('fitting clf # {}'.format(clf[0]+1))
+        clf[1].fit(X,y)
+    
+    relevant_sized_descriptors = []
+    relevant_labels = []
+        
+    for im,lb in zip(tst_images, tst_labels):
+        im = img_2_RGB(im)
+        
+        old_kp = sift.detect(im, None)
+        kp,ds = sift.compute(im, old_kp)
+        #print old_kp, kp, ds     
+        
+        if ds is not None and len(ds) == num_of_des:
+            relevant_sized_descriptors.append(ds.flatten())
+            relevant_labels.append(lb)
+
+    X = np.array(relevant_sized_descriptors)
+    #print X.shape , len(relevant_sized_descriptors)
+    #X.flatten() 
+    #for i in range(len(relevant_sized_descriptors)):
+        #print('{}/{}'.format(clf.predict(X)[i], relevant_labels[i]))
+    for clf in enumerate(clfs):
+        print('clf # {}'.format(clf[0]+1), clf[1].score(X,relevant_labels))
+            
+    
+        
+    #clean-up
+    del relevant_sized_descriptors
+    del relevant_labels
+    del X
+    del y
+    del clf
+    del d
+    del tst
+    del images
+    del labels
+    del tst_images
+    del tst_labels
+    del sift
+    
+for i in range(20,30):
+    my_main(10000, i)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
