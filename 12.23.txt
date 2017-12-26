@@ -59,7 +59,7 @@ def show_img(i, heading = '', delay = 600):
     cv2.destroyAllWindows()
 
 
-def my_main(num_of_images_to_check, num_of_des):
+def my_main(num_of_des, num_of_images_to_check = 10000):
     print '#'*100 
     print 'using {} descriptors'.format(num_of_des)
     d = unpickle(data_1)
@@ -88,6 +88,7 @@ def my_main(num_of_images_to_check, num_of_des):
                 
             
     X = np.array(relevant_sized_descriptors)
+    training_size = len(X)
     #print X.shape , len(relevant_sized_descriptors)
     #X = X.flatten()
     y = np.array(relevant_labels)
@@ -96,13 +97,22 @@ def my_main(num_of_images_to_check, num_of_des):
     
     from sklearn import svm
     
-    clf1 = svm.LinearSVC()
+    clf1 = svm.LinearSVC(C=1)
+    clf101 = svm.LinearSVC(C=0.1)
+    clf102 = svm.LinearSVC(C=10)
+    clf103 = svm.LinearSVC(C=100)
     clf2 = svm.SVR()
-    clf3 = svm.SVC(kernel='rbf')
+    clf30 = svm.SVC(C=1,kernel='rbf')
+    clf31 = svm.SVC(C=10,kernel='rbf')
+    clf32 = svm.SVC(C=100,kernel='rbf')
     clf4 = svm.SVC(C=0.01, kernel='poly', degree=3, gamma=2)
     clf5 = svm.SVC(C=0.01, kernel='poly', degree=4, gamma=2)
     clf6 = svm.SVC(C=0.05, kernel='poly', degree=3, gamma=2)
-    clf7 = svm.SVC(C=0.05, kernel='poly', degree=4, gamma=2)#best so far
+    clf7 = svm.SVC(C=1, kernel='poly', degree=4, gamma=2)#best so far
+    clf71 = svm.SVC(C=0.05, kernel='poly', degree=4, gamma=1)#best so far
+    clf72 = svm.SVC(C=0.05, kernel='poly', degree=4, gamma=5)#best so far
+    clf73 = svm.SVC(C=0.05, kernel='poly', degree=4, gamma=10)#best so far
+    clf74 = svm.SVC(C=0.05, kernel='poly', degree=4, gamma=0.25)#best so far
     clf8 = svm.SVC(C=0.01, kernel='poly', degree=5, gamma=2)
     clf9 = svm.SVC(C=0.1, kernel='poly', degree=4, gamma=2)
     clf10 = svm.SVC(C=0.1, kernel='poly', degree=5, gamma=2)
@@ -133,12 +143,13 @@ def my_main(num_of_images_to_check, num_of_des):
             relevant_labels.append(lb)
 
     X = np.array(relevant_sized_descriptors)
+    test_size = len(X)
     #print X.shape , len(relevant_sized_descriptors)
     #X.flatten() 
     #for i in range(len(relevant_sized_descriptors)):
         #print('{}/{}'.format(clf.predict(X)[i], relevant_labels[i]))
     for clf in enumerate(clfs):
-        print('clf # {}'.format(clf[0]+1), clf[1].score(X,relevant_labels))
+        print('training_size = {}, test_size = {}...clf # {}'.format(training_size,test_size,clf[0]+1), clf[1].score(X,relevant_labels))
             
     
         
@@ -156,8 +167,8 @@ def my_main(num_of_images_to_check, num_of_des):
     del tst_labels
     del sift
     
-for i in range(20,30):
-    my_main(10000, i)
+for i in range(11,12):
+    my_main(i)
 
 
 
