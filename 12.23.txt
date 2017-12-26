@@ -14,6 +14,15 @@ data_4 = batch_dir + '\\' + r'data_batch_4'
 data_5 = batch_dir + '\\' + r'data_batch_5'
 data_batch = [data_1, data_2, data_3, data_4, data_5]
 test = batch_dir + '\\' + r'test_batch'
+
+x_val = [2*i+1 for i in range(15)]
+y_val = [2*i+1 for i in range(15)]
+size_val = [i/2 for i in range(6)]
+angle_val = [i for i in range(-90,90,30)]
+print 'starting kp...'
+g_key_points = [cv2.KeyPoint(x,y,size,angle) for x in x_val for y in y_val for size in size_val for angle in angle_val]
+print g_key_points
+print 'kp ended...'
 # ============================================================================================================================================= #
 
 # ============================================================================================================================================= #
@@ -58,7 +67,9 @@ def show_img(i, heading = '', delay = 600):
     cv2.waitKey(delay)
     cv2.destroyAllWindows()
 
-
+# ============================================================================================================================================= #
+# 
+# ============================================================================================================================================= #
 def my_main(num_of_des, num_of_images_to_check = 10000):
     print '#'*100 
     print 'using {} descriptors'.format(num_of_des)
@@ -78,22 +89,17 @@ def my_main(num_of_des, num_of_images_to_check = 10000):
     
     for im,lb in zip(images, labels):
         im = img_2_RGB(im)
-        old_kp = sift.detect(im, None)
-        kp,ds = sift.compute(im, old_kp)
+        #old_kp = sift.detect(im, None)
+        kp,ds = sift.compute(im, g_key_points)
         
-        if ds is not None and len(ds) == num_of_des:
-            #print ds.flatten()
-            relevant_sized_descriptors.append(ds.flatten())
-            relevant_labels.append(lb)
+        #if ds is not None and len(ds) == num_of_des:
+        relevant_sized_descriptors.append(ds.flatten())
+        relevant_labels.append(lb)
                 
             
     X = np.array(relevant_sized_descriptors)
     training_size = len(X)
-    #print X.shape , len(relevant_sized_descriptors)
-    #X = X.flatten()
     y = np.array(relevant_labels)
-    #y = y.flatten()
-    #print y
     
     from sklearn import svm
     
@@ -134,20 +140,16 @@ def my_main(num_of_des, num_of_images_to_check = 10000):
     for im,lb in zip(tst_images, tst_labels):
         im = img_2_RGB(im)
         
-        old_kp = sift.detect(im, None)
-        kp,ds = sift.compute(im, old_kp)
+        #old_kp = sift.detect(im, None)
+        kp,ds = sift.compute(im, g_key_points)
         #print old_kp, kp, ds     
         
-        if ds is not None and len(ds) == num_of_des:
-            relevant_sized_descriptors.append(ds.flatten())
-            relevant_labels.append(lb)
+        #if ds is not None and len(ds) == num_of_des:
+        relevant_sized_descriptors.append(ds.flatten())
+        relevant_labels.append(lb)
 
     X = np.array(relevant_sized_descriptors)
     test_size = len(X)
-    #print X.shape , len(relevant_sized_descriptors)
-    #X.flatten() 
-    #for i in range(len(relevant_sized_descriptors)):
-        #print('{}/{}'.format(clf.predict(X)[i], relevant_labels[i]))
     for clf in enumerate(clfs):
         print('training_size = {}, test_size = {}...clf # {}'.format(training_size,test_size,clf[0]+1), clf[1].score(X,relevant_labels))
             
@@ -167,24 +169,5 @@ def my_main(num_of_des, num_of_images_to_check = 10000):
     del tst_labels
     del sift
     
-for i in range(11,12):
+for i in range(20,25):
     my_main(i)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
