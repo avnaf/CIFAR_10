@@ -3,13 +3,11 @@
 import cv2
 import numpy as np
 import time
+from collections import Counter
 # ============================================================================================================================================= #
 
 # ============================================================================================================================================= #
 #Globals:
-
-start = time.time()
-
 batch_dir = r'C:\Users\Naftalis\Desktop\Computer Vision\Project\cifar-10-batches-py'
 data_1 = batch_dir + '\\' + r'data_batch_1'
 data_2 = batch_dir + '\\' + r'data_batch_2'
@@ -18,7 +16,8 @@ data_4 = batch_dir + '\\' + r'data_batch_4'
 data_5 = batch_dir + '\\' + r'data_batch_5'
 data_batch = [data_1, data_2, data_3, data_4, data_5]
 test = batch_dir + '\\' + r'test_batch'
-
+predictions = []
+actuals = []
 #x_val = [2*i+1 for i in range(2)]
 #y_val = [2*i+1 for i in range(2)]
 #size_val = [i/2 for i in range(4)]
@@ -44,14 +43,15 @@ test = batch_dir + '\\' + r'test_batch'
 # ============================================================================================================================================= #
 def unpickle(file, print_msg = False):
     if print_msg:
-        print 'started unpickling {}...'.format(file[file.rfind('\\')+1:])
+        print 'starting unpickling {}...'.format(file[file.rfind('\\')+1:])
         
     import cPickle
     with open(file, 'rb') as fo:
         dict = cPickle.load(fo)
         
     if print_msg:
-        print 'finshed unpickling {}...'.format(file[file.rfind('\\')+1:])
+        print 'finished unpickling {}...'.format(file[file.rfind('\\')+1:])
+        print '#'*50 
     return dict
 
 # ============================================================================================================================================= #
@@ -73,49 +73,175 @@ def show_img(i, heading = '', delay = 1000):
     cv2.imshow(heading, i) 
     cv2.waitKey(delay)
     cv2.destroyAllWindows()
-
 # ============================================================================================================================================= #
 # 
 # ============================================================================================================================================= #
-def my_main(num_of_images_to_check = 10000):
-    print '#'*100 
-    #print 'using {} descriptors'.format(num_of_des)
-    d = unpickle(data_1,True)
-    tst = unpickle(test,True)
-
-    images = d.values()[0][:num_of_images_to_check]
-    labels = d.values()[1][:num_of_images_to_check]
-    
-    tst_images = tst.values()[0][:num_of_images_to_check]
-    tst_labels = tst.values()[1][:num_of_images_to_check]
+def find_good_kp(num_of_test_images = 20):
+    #print num_of_test_images
+    tst = unpickle(test)
+    sift = cv2.xfeatures2d.SIFT_create(nfeatures = 15, contrastThreshold=0.001, sigma=1)
+    tst_images = tst.values()[0][:num_of_test_images]
+    max_kp = 0
+    for im in enumerate(tst_images):
+        im = img_2_RGB(im[1])
+        kp = sift.detect(im, None)
+        #print kp, len(kp)
+        if len(kp) > max_kp:
+            max_kp = len(kp)
+            good_kp = kp
+        #show_img(im)
         
+    del tst_images
+    del sift
+    print '# of descriptors {}'.format(len(good_kp))
+    return good_kp
+# ============================================================================================================================================= #
+# Done only once
+# ============================================================================================================================================= #
+tst = unpickle(test,True)    
+tst_size = 10000
+tst_images = tst.values()[0][:tst_size]
+tst_labels = tst.values()[1][:tst_size] 
+  
+tst_relevant_sized_descriptors = []
+tst_relevant_labels = [] 
+hopefully_good_kp = find_good_kp()
+
+for im,lb in zip(tst_images, tst_labels):
+    im = img_2_RGB(im)
     
-    sift = cv2.xfeatures2d.SIFT_create()
+    #old_kp = sift.detect(im, None)
+    sift = cv2.xfeatures2d.SIFT_create(nfeatures = 15, contrastThreshold=0.001, sigma=1)
+    kp,ds = sift.compute(im, hopefully_good_kp)
+    
+    tst_relevant_sized_descriptors.append(ds.flatten())
+    tst_relevant_labels.append(lb)
+        
+    tst_X = np.array(tst_relevant_sized_descriptors)
+    test_size = len(tst_X)
+# ============================================================================================================================================= #
+
+def my_main(num_of_images_to_check, offset):
+    
+    global hopefully_good_kp
+    global test_size
+    global tst_X
+    global tst_relevant_labels
+    
+    start = time.time()
+    print '#'*100 
+    sift = cv2.xfeatures2d.SIFT_create(nfeatures = 15, contrastThreshold=0.001, sigma=1)
     print 'sift created...'
+    
+    data_set_counter = 0
     
     relevant_sized_descriptors = []
     relevant_labels = []
     
-    hopefully_good_kp = find_good_kp()
-    
-    
-    print 'computing training descriptors...'
-    for im,lb in zip(images, labels):
-        im = img_2_RGB(im)
-        #old_kp = sift.detect(im, None)
-        kp,ds = sift.compute(im, hopefully_good_kp)
+    #print 'using {} descriptors'.format(num_of_des)
+    for data in data_batch:
+        data_set_counter += 1
+        d = unpickle(data,True)
+
+        images = d.values()[0][offset:offset + num_of_images_to_check]
+        labels = d.values()[1][offset:offset + num_of_images_to_check]
         
-        #if ds is not None and len(ds) == num_of_des:
-        relevant_sized_descriptors.append(ds.flatten())
-        relevant_labels.append(lb)
-                
-            
+        print 'starting computing training {} descriptors...'.format(data_set_counter)
+        for im,lb in zip(images, labels):
+            im = img_2_RGB(im)
+            #old_kp = sift.detect(im, None)
+            kp,ds = sift.compute(im, hopefully_good_kp)
+            #if ds is not None and len(ds) == num_of_des:
+            relevant_sized_descriptors.append(ds.flatten())
+            relevant_labels.append(lb)
+        print 'finished computing training {} descriptors...'.format(data_set_counter)
+        print '#'*50 
+
     X = np.array(relevant_sized_descriptors)
     training_size = len(X)
     y = np.array(relevant_labels)
     
-    from sklearn import svm
+    from sklearn.svm import SVC 
+    from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
     
+    clf = SVC(C = 0.001, kernel='poly', degree = 3, gamma = 0.001, probability=True)#best so far
+    clfs = []
+    clfs += [LinearDiscriminantAnalysis()]
+    clfs += [LinearDiscriminantAnalysis(solver = 'lsqr')]
+    clfs += [LinearDiscriminantAnalysis(solver = 'lsqr', shrinkage = 'auto')]
+    clfs += [LinearDiscriminantAnalysis(solver = 'lsqr', shrinkage = 0.2)]
+    clfs += [LinearDiscriminantAnalysis(solver = 'lsqr', shrinkage = 0.5)]
+    clfs += [LinearDiscriminantAnalysis(solver = 'lsqr', shrinkage = 0.8)]
+    clfs += [LinearDiscriminantAnalysis(solver = 'lsqr', shrinkage = 1)]
+    clfs += [LinearDiscriminantAnalysis(solver = 'eigen')]
+    clfs += [LinearDiscriminantAnalysis(solver = 'eigen', shrinkage = 'auto')]
+    clfs += [LinearDiscriminantAnalysis(solver = 'eigen', shrinkage = 0.2)]
+    clfs += [LinearDiscriminantAnalysis(solver = 'eigen', shrinkage = 0.5)]
+    clfs += [LinearDiscriminantAnalysis(solver = 'eigen', shrinkage = 0.8)]
+    clfs += [LinearDiscriminantAnalysis(solver = 'eigen', shrinkage = 1)]
+
+    
+
+    
+    fit_start_time = time.time()
+    print 'starting fitting...' 
+    for clf in enumerate(clfs):
+        each_fit_start_time = time.time()
+        print 'start fit'
+        clf[1].fit(X,y)
+        print 'end   fit ({} seconds)'.format(time.time() - each_fit_start_time) 
+    print 'finished fitting... ({} seconds)'.format(time.time() - fit_start_time)
+    print '#'*50
+
+    global predictions
+    global actuals
+    for clf in enumerate(clfs):
+        score_time = time.time()
+        print 'kernel # {}: training_size = {}, test_size = {}... Rate = {}% ({} seconds)'.format(clf[0]+1,training_size,test_size, clf[1].score(tst_X,tst_relevant_labels), time.time() - score_time)
+        predictions.append(clf[1].predict(tst_X).flatten())
+        # just for the 1st time. It doesn't change
+        if not offset:
+            actuals = relevant_labels
+            
+    
+        
+    #clean-up
+    del relevant_sized_descriptors
+    del relevant_labels
+    del X
+    del y
+    del clf
+    del d
+    del images
+    del labels
+    del sift
+
+    end = time.time()
+    print 'time elapsed: {}'.format(end - start)
+    return end-start
+
+
+    
+size = 10000
+for i in range(1):
+    print '#'
+    my_main(size,size*i)
+
+#for prediction in predictions:
+#    print '-'*50
+#    for i in zip(prediction,actuals):
+#        print i, "True" if i[0] == i[1] else "\t\t\tFalse"
+#
+#print '-'*50
+#confusion_matrix = []
+#counts = [Counter(x) for x in zip(*predictions)]
+#final = [c.most_common(1)[0][0] for c in counts]
+#print '-'*50
+#for i in zip(final,actuals):
+#    print i, "True" if i[0] == i[1] else "\t\t\tFalse"
+        
+#print times
+
 #    clf1 = svm.LinearSVC(C=1)
 #    clf101 = svm.LinearSVC(C=0.1)
 #    clf102 = svm.LinearSVC(C=10)
@@ -127,7 +253,17 @@ def my_main(num_of_images_to_check = 10000):
 #    clf4 = svm.SVC(C=0.01, kernel='poly', degree=3, gamma=2)
 #    clf5 = svm.SVC(C=0.01, kernel='poly', degree=4, gamma=2)
 #    clf6 = svm.SVC(C=0.05, kernel='poly', degree=3, gamma=2)
-    clf7 = svm.SVC(C=1, kernel='poly', degree=4, gamma=2)#best so far
+#    clf = SVC(C = 0.001, kernel='poly', degree = 3, gamma = 0.001, probability=True)#best so far
+#    clf2 = RandomForestClassifier(min_samples_leaf=20)
+#    clf3 = OneVsRestClassifier(SVC(C = 0.001, kernel='poly', degree = 3, gamma = 2, probability=True), n_jobs=-1)
+
+#    clf11 = svm.SVC(C=0.01, kernel='poly', degree=4, gamma=2, cache_size = 2000)#best so far
+#    clf12 = svm.SVC(C=0.01, kernel='poly', degree=4, gamma=2, cache_size = 3000)#best so far
+#    clf13 = svm.SVC(C=0.01, kernel='poly', degree=4, gamma=2, cache_size = 4000)#best so far
+#    clf14 = svm.SVC(C=0.01, kernel='poly', degree=4, gamma=2, cache_size = 5000)#best so far
+#    clf15 = svm.SVC(C=0.01, kernel='poly', degree=4, gamma=2, cache_size = 6000)#best so far
+    
+#    clf2 = svm.SVC(C=0.1, kernel='poly', degree=3, gamma=2)#best so far
 #    clf71 = svm.SVC(C=0.05, kernel='poly', degree=4, gamma=1)#best so far
 #    clf72 = svm.SVC(C=0.05, kernel='poly', degree=4, gamma=5)#best so far
 #    clf73 = svm.SVC(C=0.05, kernel='poly', degree=4, gamma=10)#best so far
@@ -139,69 +275,3 @@ def my_main(num_of_images_to_check = 10000):
 #    clf12 = svm.SVC(C=0.5, kernel='poly', degree=4, gamma=2)
 #    clf13 = svm.SVC(C=1.0, kernel='poly', degree=4, gamma=2)
 #    clf14 = svm.SVC(C=2.0, kernel='poly', degree=4, gamma=2)
-    
-    
-    clfs = [clf7]
-    print 'started fitting...'
-    for clf in enumerate(clfs):
-        clf[1].fit(X,y)
-    print 'finished fitting...'
-    
-    relevant_sized_descriptors = []
-    relevant_labels = []
-        
-    for im,lb in zip(tst_images, tst_labels):
-        im = img_2_RGB(im)
-        
-        #old_kp = sift.detect(im, None)
-        kp,ds = sift.compute(im, hopefully_good_kp)
-        #print old_kp, kp, ds     
-        
-        #if ds is not None and len(ds) == num_of_des:
-        relevant_sized_descriptors.append(ds.flatten())
-        relevant_labels.append(lb)
-
-    X = np.array(relevant_sized_descriptors)
-    test_size = len(X)
-    for clf in enumerate(clfs):
-        print 'training_size = {}, test_size = {}... Rate = {}%'.format(training_size,test_size, clf[1].score(X,relevant_labels))
-            
-    
-        
-    #clean-up
-    del relevant_sized_descriptors
-    del relevant_labels
-    del X
-    del y
-    del clf
-    del d
-    del tst
-    del images
-    del labels
-    del tst_images
-    del tst_labels
-    del sift
-
-    end = time.time()
-    print 'time elapsed: {}'.format(end - start)
-
-def find_good_kp(num_of_test_images = 10):
-    tst = unpickle(test)
-    sift = cv2.xfeatures2d.SIFT_create()
-    tst_images = tst.values()[0][:num_of_test_images]
-    kp = [[] for i in range(10)]
-    max_kp = 0
-    for im in enumerate(tst_images):
-        im = img_2_RGB(im[1])
-        kp = sift.detect(im, None)
-        #print kp, len(kp)
-        if len(kp) > max_kp:
-            good_kp = kp
-        #show_img(im)
-        
-    del tst_images
-    del sift
-    return good_kp
-    
-#find_good_kp()
-my_main(5000)
