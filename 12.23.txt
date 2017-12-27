@@ -2,10 +2,14 @@
 #Imports
 import cv2
 import numpy as np
+import time
 # ============================================================================================================================================= #
 
 # ============================================================================================================================================= #
 #Globals:
+
+start = time.time()
+
 batch_dir = r'C:\Users\Naftalis\Desktop\Computer Vision\Project\cifar-10-batches-py'
 data_1 = batch_dir + '\\' + r'data_batch_1'
 data_2 = batch_dir + '\\' + r'data_batch_2'
@@ -15,14 +19,14 @@ data_5 = batch_dir + '\\' + r'data_batch_5'
 data_batch = [data_1, data_2, data_3, data_4, data_5]
 test = batch_dir + '\\' + r'test_batch'
 
-x_val = [2*i+1 for i in range(15)]
-y_val = [2*i+1 for i in range(15)]
-size_val = [i/2 for i in range(6)]
-angle_val = [i for i in range(-90,90,30)]
-print 'starting kp...'
-g_key_points = [cv2.KeyPoint(x,y,size,angle) for x in x_val for y in y_val for size in size_val for angle in angle_val]
-print g_key_points
-print 'kp ended...'
+#x_val = [2*i+1 for i in range(2)]
+#y_val = [2*i+1 for i in range(2)]
+#size_val = [i/2 for i in range(4)]
+#angle_val = [i for i in range(-90,90,90)]
+#print 'starting kp...'
+#g_key_points = [cv2.KeyPoint(x,y,size,angle) for x in x_val for y in y_val for size in size_val for angle in angle_val]
+#print 'num of kp: {}'.format(len(g_key_points))
+#print 'finished kp...'
 # ============================================================================================================================================= #
 
 # ============================================================================================================================================= #
@@ -40,11 +44,14 @@ print 'kp ended...'
 # ============================================================================================================================================= #
 def unpickle(file, print_msg = False):
     if print_msg:
-        print 'unpicking training set images'
+        print 'started unpickling {}...'.format(file[file.rfind('\\')+1:])
         
     import cPickle
     with open(file, 'rb') as fo:
         dict = cPickle.load(fo)
+        
+    if print_msg:
+        print 'finshed unpickling {}...'.format(file[file.rfind('\\')+1:])
     return dict
 
 # ============================================================================================================================================= #
@@ -62,7 +69,7 @@ def img_2_RGB(im, print_msg = False):
 # ============================================================================================================================================= #
 # input: image list, heading (optional), delay [mili-seconds] (optional)
 # ============================================================================================================================================= #
-def show_img(i, heading = '', delay = 600):
+def show_img(i, heading = '', delay = 1000):
     cv2.imshow(heading, i) 
     cv2.waitKey(delay)
     cv2.destroyAllWindows()
@@ -70,11 +77,11 @@ def show_img(i, heading = '', delay = 600):
 # ============================================================================================================================================= #
 # 
 # ============================================================================================================================================= #
-def my_main(num_of_des, num_of_images_to_check = 10000):
+def my_main(num_of_images_to_check = 10000):
     print '#'*100 
-    print 'using {} descriptors'.format(num_of_des)
-    d = unpickle(data_1)
-    tst = unpickle(test)
+    #print 'using {} descriptors'.format(num_of_des)
+    d = unpickle(data_1,True)
+    tst = unpickle(test,True)
 
     images = d.values()[0][:num_of_images_to_check]
     labels = d.values()[1][:num_of_images_to_check]
@@ -82,15 +89,21 @@ def my_main(num_of_des, num_of_images_to_check = 10000):
     tst_images = tst.values()[0][:num_of_images_to_check]
     tst_labels = tst.values()[1][:num_of_images_to_check]
         
+    
     sift = cv2.xfeatures2d.SIFT_create()
+    print 'sift created...'
     
     relevant_sized_descriptors = []
     relevant_labels = []
     
+    hopefully_good_kp = find_good_kp()
+    
+    
+    print 'computing training descriptors...'
     for im,lb in zip(images, labels):
         im = img_2_RGB(im)
         #old_kp = sift.detect(im, None)
-        kp,ds = sift.compute(im, g_key_points)
+        kp,ds = sift.compute(im, hopefully_good_kp)
         
         #if ds is not None and len(ds) == num_of_des:
         relevant_sized_descriptors.append(ds.flatten())
@@ -103,36 +116,36 @@ def my_main(num_of_des, num_of_images_to_check = 10000):
     
     from sklearn import svm
     
-    clf1 = svm.LinearSVC(C=1)
-    clf101 = svm.LinearSVC(C=0.1)
-    clf102 = svm.LinearSVC(C=10)
-    clf103 = svm.LinearSVC(C=100)
-    clf2 = svm.SVR()
-    clf30 = svm.SVC(C=1,kernel='rbf')
-    clf31 = svm.SVC(C=10,kernel='rbf')
-    clf32 = svm.SVC(C=100,kernel='rbf')
-    clf4 = svm.SVC(C=0.01, kernel='poly', degree=3, gamma=2)
-    clf5 = svm.SVC(C=0.01, kernel='poly', degree=4, gamma=2)
-    clf6 = svm.SVC(C=0.05, kernel='poly', degree=3, gamma=2)
+#    clf1 = svm.LinearSVC(C=1)
+#    clf101 = svm.LinearSVC(C=0.1)
+#    clf102 = svm.LinearSVC(C=10)
+#    clf103 = svm.LinearSVC(C=100)
+#    clf2 = svm.SVR()
+#    clf30 = svm.SVC(C=1,kernel='rbf')
+#    clf31 = svm.SVC(C=10,kernel='rbf')
+#    clf32 = svm.SVC(C=100,kernel='rbf')
+#    clf4 = svm.SVC(C=0.01, kernel='poly', degree=3, gamma=2)
+#    clf5 = svm.SVC(C=0.01, kernel='poly', degree=4, gamma=2)
+#    clf6 = svm.SVC(C=0.05, kernel='poly', degree=3, gamma=2)
     clf7 = svm.SVC(C=1, kernel='poly', degree=4, gamma=2)#best so far
-    clf71 = svm.SVC(C=0.05, kernel='poly', degree=4, gamma=1)#best so far
-    clf72 = svm.SVC(C=0.05, kernel='poly', degree=4, gamma=5)#best so far
-    clf73 = svm.SVC(C=0.05, kernel='poly', degree=4, gamma=10)#best so far
-    clf74 = svm.SVC(C=0.05, kernel='poly', degree=4, gamma=0.25)#best so far
-    clf8 = svm.SVC(C=0.01, kernel='poly', degree=5, gamma=2)
-    clf9 = svm.SVC(C=0.1, kernel='poly', degree=4, gamma=2)
-    clf10 = svm.SVC(C=0.1, kernel='poly', degree=5, gamma=2)
-    clf11 = svm.SVC(C=0.3, kernel='poly', degree=4, gamma=2)
-    clf12 = svm.SVC(C=0.5, kernel='poly', degree=4, gamma=2)
-    clf13 = svm.SVC(C=1.0, kernel='poly', degree=4, gamma=2)
-    clf14 = svm.SVC(C=2.0, kernel='poly', degree=4, gamma=2)
+#    clf71 = svm.SVC(C=0.05, kernel='poly', degree=4, gamma=1)#best so far
+#    clf72 = svm.SVC(C=0.05, kernel='poly', degree=4, gamma=5)#best so far
+#    clf73 = svm.SVC(C=0.05, kernel='poly', degree=4, gamma=10)#best so far
+#    clf74 = svm.SVC(C=0.05, kernel='poly', degree=4, gamma=0.25)#best so far
+#    clf8 = svm.SVC(C=0.01, kernel='poly', degree=5, gamma=2)
+#    clf9 = svm.SVC(C=0.1, kernel='poly', degree=4, gamma=2)
+#    clf10 = svm.SVC(C=0.1, kernel='poly', degree=5, gamma=2)
+#    clf11 = svm.SVC(C=0.3, kernel='poly', degree=4, gamma=2)
+#    clf12 = svm.SVC(C=0.5, kernel='poly', degree=4, gamma=2)
+#    clf13 = svm.SVC(C=1.0, kernel='poly', degree=4, gamma=2)
+#    clf14 = svm.SVC(C=2.0, kernel='poly', degree=4, gamma=2)
     
     
     clfs = [clf7]
-    
+    print 'started fitting...'
     for clf in enumerate(clfs):
-        print('fitting clf # {}'.format(clf[0]+1))
         clf[1].fit(X,y)
+    print 'finished fitting...'
     
     relevant_sized_descriptors = []
     relevant_labels = []
@@ -141,7 +154,7 @@ def my_main(num_of_des, num_of_images_to_check = 10000):
         im = img_2_RGB(im)
         
         #old_kp = sift.detect(im, None)
-        kp,ds = sift.compute(im, g_key_points)
+        kp,ds = sift.compute(im, hopefully_good_kp)
         #print old_kp, kp, ds     
         
         #if ds is not None and len(ds) == num_of_des:
@@ -151,7 +164,7 @@ def my_main(num_of_des, num_of_images_to_check = 10000):
     X = np.array(relevant_sized_descriptors)
     test_size = len(X)
     for clf in enumerate(clfs):
-        print('training_size = {}, test_size = {}...clf # {}'.format(training_size,test_size,clf[0]+1), clf[1].score(X,relevant_labels))
+        print 'training_size = {}, test_size = {}... Rate = {}%'.format(training_size,test_size, clf[1].score(X,relevant_labels))
             
     
         
@@ -168,6 +181,27 @@ def my_main(num_of_des, num_of_images_to_check = 10000):
     del tst_images
     del tst_labels
     del sift
+
+    end = time.time()
+    print 'time elapsed: {}'.format(end - start)
+
+def find_good_kp(num_of_test_images = 10):
+    tst = unpickle(test)
+    sift = cv2.xfeatures2d.SIFT_create()
+    tst_images = tst.values()[0][:num_of_test_images]
+    kp = [[] for i in range(10)]
+    max_kp = 0
+    for im in enumerate(tst_images):
+        im = img_2_RGB(im[1])
+        kp = sift.detect(im, None)
+        #print kp, len(kp)
+        if len(kp) > max_kp:
+            good_kp = kp
+        #show_img(im)
+        
+    del tst_images
+    del sift
+    return good_kp
     
-for i in range(20,25):
-    my_main(i)
+#find_good_kp()
+my_main(5000)
