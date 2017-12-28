@@ -76,20 +76,28 @@ def show_img(i, heading = '', delay = 1000):
 # ============================================================================================================================================= #
 # 
 # ============================================================================================================================================= #
-def find_good_kp(num_of_test_images = 20):
+def find_good_kp(num_of_test_images = 20, hueristic = 2, num_of_images_to_sum = 5):
     #print num_of_test_images
     tst = unpickle(test)
-    sift = cv2.xfeatures2d.SIFT_create(nfeatures = 15, contrastThreshold=0.001, sigma=1)
+    sift = cv2.xfeatures2d.SIFT_create()
     tst_images = tst.values()[0][:num_of_test_images]
-    max_kp = 0
-    for im in enumerate(tst_images):
-        im = img_2_RGB(im[1])
-        kp = sift.detect(im, None)
-        #print kp, len(kp)
-        if len(kp) > max_kp:
-            max_kp = len(kp)
-            good_kp = kp
-        #show_img(im)
+    if not hueristic:
+        max_kp = 0
+        for im in enumerate(tst_images):
+            im = img_2_RGB(im[1])
+            kp = sift.detect(im, None)
+            #print kp, len(kp)
+            if len(kp) > max_kp:
+                max_kp = len(kp)
+                good_kp = kp
+    elif hueristic == 1:
+        good_kp = []
+        for im in enumerate(tst_images):
+            if im[0] > num_of_images_to_sum:
+                break
+            im = img_2_RGB(im[1])
+            kp = sift.detect(im, None)
+            good_kp += kp
         
     del tst_images
     del sift
@@ -111,14 +119,14 @@ for im,lb in zip(tst_images, tst_labels):
     im = img_2_RGB(im)
     
     #old_kp = sift.detect(im, None)
-    sift = cv2.xfeatures2d.SIFT_create(nfeatures = 15, contrastThreshold=0.001, sigma=1)
+    sift = cv2.xfeatures2d.SIFT_create()
     kp,ds = sift.compute(im, hopefully_good_kp)
     
     tst_relevant_sized_descriptors.append(ds.flatten())
     tst_relevant_labels.append(lb)
         
-    tst_X = np.array(tst_relevant_sized_descriptors)
-    test_size = len(tst_X)
+tst_X = np.array(tst_relevant_sized_descriptors)
+test_size = len(tst_X)
 # ============================================================================================================================================= #
 
 def my_main(num_of_images_to_check, offset):
@@ -130,7 +138,7 @@ def my_main(num_of_images_to_check, offset):
     
     start = time.time()
     print '#'*100 
-    sift = cv2.xfeatures2d.SIFT_create(nfeatures = 15, contrastThreshold=0.001, sigma=1)
+    sift = cv2.xfeatures2d.SIFT_create()
     print 'sift created...'
     
     data_set_counter = 0
@@ -166,19 +174,17 @@ def my_main(num_of_images_to_check, offset):
     
     clf = SVC(C = 0.001, kernel='poly', degree = 3, gamma = 0.001, probability=True)#best so far
     clfs = []
-    clfs += [LinearDiscriminantAnalysis()]
-    clfs += [LinearDiscriminantAnalysis(solver = 'lsqr')]
-    clfs += [LinearDiscriminantAnalysis(solver = 'lsqr', shrinkage = 'auto')]
-    clfs += [LinearDiscriminantAnalysis(solver = 'lsqr', shrinkage = 0.2)]
-    clfs += [LinearDiscriminantAnalysis(solver = 'lsqr', shrinkage = 0.5)]
-    clfs += [LinearDiscriminantAnalysis(solver = 'lsqr', shrinkage = 0.8)]
-    clfs += [LinearDiscriminantAnalysis(solver = 'lsqr', shrinkage = 1)]
-    clfs += [LinearDiscriminantAnalysis(solver = 'eigen')]
-    clfs += [LinearDiscriminantAnalysis(solver = 'eigen', shrinkage = 'auto')]
-    clfs += [LinearDiscriminantAnalysis(solver = 'eigen', shrinkage = 0.2)]
-    clfs += [LinearDiscriminantAnalysis(solver = 'eigen', shrinkage = 0.5)]
-    clfs += [LinearDiscriminantAnalysis(solver = 'eigen', shrinkage = 0.8)]
-    clfs += [LinearDiscriminantAnalysis(solver = 'eigen', shrinkage = 1)]
+    #clfs += [LinearDiscriminantAnalysis()]                                                      #1
+    clfs += [LinearDiscriminantAnalysis(solver = 'lsqr', shrinkage = 'auto')]                   #2
+    clfs += [LinearDiscriminantAnalysis(solver = 'lsqr', shrinkage = 0.2)]                      #3
+    clfs += [LinearDiscriminantAnalysis(solver = 'lsqr', shrinkage = 0.5)]                      #4
+    clfs += [LinearDiscriminantAnalysis(solver = 'lsqr', shrinkage = 0.8)]                      #5
+    clfs += [LinearDiscriminantAnalysis(solver = 'lsqr', shrinkage = 1)]                        #6
+    clfs += [LinearDiscriminantAnalysis(solver = 'eigen', shrinkage = 'auto')]                  #7
+    clfs += [LinearDiscriminantAnalysis(solver = 'eigen', shrinkage = 0.2)]                     #8
+    clfs += [LinearDiscriminantAnalysis(solver = 'eigen', shrinkage = 0.5)]                     #9
+    clfs += [LinearDiscriminantAnalysis(solver = 'eigen', shrinkage = 0.8)]                     #10
+    clfs += [LinearDiscriminantAnalysis(solver = 'eigen', shrinkage = 1)]                       #11
 
     
 
