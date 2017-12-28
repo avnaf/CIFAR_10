@@ -76,12 +76,14 @@ def show_img(i, heading = '', delay = 1000):
 # ============================================================================================================================================= #
 # 
 # ============================================================================================================================================= #
-def find_good_kp(num_of_test_images = 20, hueristic = 2, num_of_images_to_sum = 5):
+def find_good_kp(num_of_test_images = 100, hueristic = 'good image for every class', num_of_images_to_sum = 4):
     #print num_of_test_images
     tst = unpickle(test)
     sift = cv2.xfeatures2d.SIFT_create()
     tst_images = tst.values()[0][:num_of_test_images]
-    if not hueristic:
+    good_kp = []
+    
+    if hueristic == 'richest image':
         max_kp = 0
         for im in enumerate(tst_images):
             im = img_2_RGB(im[1])
@@ -90,14 +92,25 @@ def find_good_kp(num_of_test_images = 20, hueristic = 2, num_of_images_to_sum = 
             if len(kp) > max_kp:
                 max_kp = len(kp)
                 good_kp = kp
-    elif hueristic == 1:
-        good_kp = []
+    elif hueristic == 'several images':  
         for im in enumerate(tst_images):
-            if im[0] > num_of_images_to_sum:
+            if im[0] == num_of_images_to_sum:
                 break
             im = img_2_RGB(im[1])
             kp = sift.detect(im, None)
             good_kp += kp
+    elif hueristic == 'good image for every class':
+        tst_labels = tst.values()[1][:num_of_test_images]
+        used_labels = []
+        for pair in enumerate(zip(tst_images, tst_labels)):
+            im = img_2_RGB(pair[1][0])
+            lb = pair[1][1]
+            if lb not in used_labels and len(sift.detect(im, None)) >= 20:
+                good_kp += sift.detect(im, None)
+            if len(used_labels) == 10:
+                break
+        
+        
         
     del tst_images
     del sift
@@ -176,15 +189,15 @@ def my_main(num_of_images_to_check, offset):
     clfs = []
     #clfs += [LinearDiscriminantAnalysis()]                                                      #1
     clfs += [LinearDiscriminantAnalysis(solver = 'lsqr', shrinkage = 'auto')]                   #2
-    clfs += [LinearDiscriminantAnalysis(solver = 'lsqr', shrinkage = 0.2)]                      #3
-    clfs += [LinearDiscriminantAnalysis(solver = 'lsqr', shrinkage = 0.5)]                      #4
-    clfs += [LinearDiscriminantAnalysis(solver = 'lsqr', shrinkage = 0.8)]                      #5
-    clfs += [LinearDiscriminantAnalysis(solver = 'lsqr', shrinkage = 1)]                        #6
-    clfs += [LinearDiscriminantAnalysis(solver = 'eigen', shrinkage = 'auto')]                  #7
-    clfs += [LinearDiscriminantAnalysis(solver = 'eigen', shrinkage = 0.2)]                     #8
-    clfs += [LinearDiscriminantAnalysis(solver = 'eigen', shrinkage = 0.5)]                     #9
-    clfs += [LinearDiscriminantAnalysis(solver = 'eigen', shrinkage = 0.8)]                     #10
-    clfs += [LinearDiscriminantAnalysis(solver = 'eigen', shrinkage = 1)]                       #11
+#    clfs += [LinearDiscriminantAnalysis(solver = 'lsqr', shrinkage = 0.2)]                      #3
+#    clfs += [LinearDiscriminantAnalysis(solver = 'lsqr', shrinkage = 0.5)]                      #4
+#    clfs += [LinearDiscriminantAnalysis(solver = 'lsqr', shrinkage = 0.8)]                      #5
+#    clfs += [LinearDiscriminantAnalysis(solver = 'lsqr', shrinkage = 1)]                        #6
+#    clfs += [LinearDiscriminantAnalysis(solver = 'eigen', shrinkage = 'auto')]                  #7
+#    clfs += [LinearDiscriminantAnalysis(solver = 'eigen', shrinkage = 0.2)]                     #8
+#    clfs += [LinearDiscriminantAnalysis(solver = 'eigen', shrinkage = 0.5)]                     #9
+#    clfs += [LinearDiscriminantAnalysis(solver = 'eigen', shrinkage = 0.8)]                     #10
+#    clfs += [LinearDiscriminantAnalysis(solver = 'eigen', shrinkage = 1)]                       #11
 
     
 
@@ -232,52 +245,3 @@ size = 10000
 for i in range(1):
     print '#'
     my_main(size,size*i)
-
-#for prediction in predictions:
-#    print '-'*50
-#    for i in zip(prediction,actuals):
-#        print i, "True" if i[0] == i[1] else "\t\t\tFalse"
-#
-#print '-'*50
-#confusion_matrix = []
-#counts = [Counter(x) for x in zip(*predictions)]
-#final = [c.most_common(1)[0][0] for c in counts]
-#print '-'*50
-#for i in zip(final,actuals):
-#    print i, "True" if i[0] == i[1] else "\t\t\tFalse"
-        
-#print times
-
-#    clf1 = svm.LinearSVC(C=1)
-#    clf101 = svm.LinearSVC(C=0.1)
-#    clf102 = svm.LinearSVC(C=10)
-#    clf103 = svm.LinearSVC(C=100)
-#    clf2 = svm.SVR()
-#    clf30 = svm.SVC(C=1,kernel='rbf')
-#    clf31 = svm.SVC(C=10,kernel='rbf')
-#    clf32 = svm.SVC(C=100,kernel='rbf')
-#    clf4 = svm.SVC(C=0.01, kernel='poly', degree=3, gamma=2)
-#    clf5 = svm.SVC(C=0.01, kernel='poly', degree=4, gamma=2)
-#    clf6 = svm.SVC(C=0.05, kernel='poly', degree=3, gamma=2)
-#    clf = SVC(C = 0.001, kernel='poly', degree = 3, gamma = 0.001, probability=True)#best so far
-#    clf2 = RandomForestClassifier(min_samples_leaf=20)
-#    clf3 = OneVsRestClassifier(SVC(C = 0.001, kernel='poly', degree = 3, gamma = 2, probability=True), n_jobs=-1)
-
-#    clf11 = svm.SVC(C=0.01, kernel='poly', degree=4, gamma=2, cache_size = 2000)#best so far
-#    clf12 = svm.SVC(C=0.01, kernel='poly', degree=4, gamma=2, cache_size = 3000)#best so far
-#    clf13 = svm.SVC(C=0.01, kernel='poly', degree=4, gamma=2, cache_size = 4000)#best so far
-#    clf14 = svm.SVC(C=0.01, kernel='poly', degree=4, gamma=2, cache_size = 5000)#best so far
-#    clf15 = svm.SVC(C=0.01, kernel='poly', degree=4, gamma=2, cache_size = 6000)#best so far
-    
-#    clf2 = svm.SVC(C=0.1, kernel='poly', degree=3, gamma=2)#best so far
-#    clf71 = svm.SVC(C=0.05, kernel='poly', degree=4, gamma=1)#best so far
-#    clf72 = svm.SVC(C=0.05, kernel='poly', degree=4, gamma=5)#best so far
-#    clf73 = svm.SVC(C=0.05, kernel='poly', degree=4, gamma=10)#best so far
-#    clf74 = svm.SVC(C=0.05, kernel='poly', degree=4, gamma=0.25)#best so far
-#    clf8 = svm.SVC(C=0.01, kernel='poly', degree=5, gamma=2)
-#    clf9 = svm.SVC(C=0.1, kernel='poly', degree=4, gamma=2)
-#    clf10 = svm.SVC(C=0.1, kernel='poly', degree=5, gamma=2)
-#    clf11 = svm.SVC(C=0.3, kernel='poly', degree=4, gamma=2)
-#    clf12 = svm.SVC(C=0.5, kernel='poly', degree=4, gamma=2)
-#    clf13 = svm.SVC(C=1.0, kernel='poly', degree=4, gamma=2)
-#    clf14 = svm.SVC(C=2.0, kernel='poly', degree=4, gamma=2)
