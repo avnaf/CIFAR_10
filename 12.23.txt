@@ -76,12 +76,18 @@ def show_img(i, heading = '', delay = 1000):
 # ============================================================================================================================================= #
 # 
 # ============================================================================================================================================= #
-def find_good_kp(num_of_test_images = 100, hueristic = 'good image for every class', num_of_images_to_sum = 4):
+def find_good_kp(num_of_test_images = 10000, hueristic = 'several good images', num_of_images_to_sum = 2):
     #print num_of_test_images
     tst = unpickle(test)
     sift = cv2.xfeatures2d.SIFT_create()
     tst_images = tst.values()[0][:num_of_test_images]
     good_kp = []
+    
+#    for im in enumerate(tst_images):
+#        if im[0] < 133:
+#            continue
+#        print im[0], ', ', len(sift.detect(img_2_RGB(im[1]), None))
+#        show_img(cv2.resize(img_2_RGB(im[1]), (0,0), fx=10, fy=10), delay = 750)
     
     if hueristic == 'richest image':
         max_kp = 0
@@ -90,8 +96,43 @@ def find_good_kp(num_of_test_images = 100, hueristic = 'good image for every cla
             kp = sift.detect(im, None)
             #print kp, len(kp)
             if len(kp) > max_kp:
+                show_img(im)
                 max_kp = len(kp)
                 good_kp = kp
+                
+    elif hueristic == 'specific image':
+        for im in enumerate(tst_images):
+            # im[0] == 6: 0.5415
+            # im[0] == 8: 0.5395
+            # im[0] == 10: 0.5392
+            # im[0] == 12: 0.5375
+            # im[0] == 13: 0.5375
+            # im[0] == 58: 0.5529
+            if im[0] < 59:
+                continue
+            print im[0], len(sift.detect(img_2_RGB(im[1]), None))
+            show_img(cv2.resize(img_2_RGB(im[1]), (0,0),fx=15,fy=15),delay = 300)
+            continue
+            if im[0] == 58:
+                im = img_2_RGB(im[1])
+                good_kp = sift.detect(im, None)
+                show_img(cv2.resize(im, (0,0),fx=10,fy=10),delay = 2500)
+                break
+                
+    elif hueristic == 'several good images':  
+        count = 0
+        for im in enumerate(tst_images):
+            img = img_2_RGB(im[1])
+            kp = sift.detect(img, None)
+#            if len(kp) >= 20:
+            # 0.5699% (65,58)
+            # 0.5717% (65,168)
+            if im[0] == 168 or im[0] == 65:
+                good_kp += kp
+                count += 1
+            if count == num_of_images_to_sum:
+                break
+            
     elif hueristic == 'several images':  
         for im in enumerate(tst_images):
             if im[0] == num_of_images_to_sum:
@@ -99,15 +140,25 @@ def find_good_kp(num_of_test_images = 100, hueristic = 'good image for every cla
             im = img_2_RGB(im[1])
             kp = sift.detect(im, None)
             good_kp += kp
+            
     elif hueristic == 'good image for every class':
         tst_labels = tst.values()[1][:num_of_test_images]
         used_labels = []
         for pair in enumerate(zip(tst_images, tst_labels)):
             im = img_2_RGB(pair[1][0])
             lb = pair[1][1]
-            if lb not in used_labels and len(sift.detect(im, None)) >= 20:
+            if lb not in used_labels: #and len(sift.detect(im, None)) >= 10:
+                used_labels += [lb]
                 good_kp += sift.detect(im, None)
             if len(used_labels) == 10:
+                break
+    elif hueristic == 'several runs':
+        for im in enumerate(tst_images):
+            im = img_2_RGB(im[1])
+            kp = sift.detect(im, None)
+            if len(kp) >= 25:
+                good_kp += [kp]
+            if len(good_kp == 5):
                 break
         
         
@@ -245,3 +296,6 @@ size = 10000
 for i in range(1):
     print '#'
     my_main(size,size*i)
+
+import os
+print('\a')
