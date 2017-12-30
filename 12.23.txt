@@ -25,7 +25,7 @@ data_5 = batch_dir + '\\' + r'data_batch_5'
 data_batch = [data_1, data_2, data_3, data_4, data_5]
 test = batch_dir + '\\' + r'test_batch'
 clf_name = r"C:\Users\Naftalis\Desktop\Computer Vision\Project\clf_dense"
-
+N = 300
 # labels for prediction
 predictions = []
 actuals = []
@@ -130,7 +130,7 @@ def find_good_kp(hueristic = 'dense', num_of_images_to_sum = 3):
     del tst   
     del tst_images
     del sift
-#    print '# of descriptors {}'.format(len(good_kp))
+    print '# of descriptors {}'.format(len(good_kp))
     return good_kp
 
 # ============================================================================================================================================= #
@@ -139,16 +139,17 @@ def find_good_kp(hueristic = 'dense', num_of_images_to_sum = 3):
 #           tst_relevant_labels - the true labels
 # output: classifier prediction
 # ============================================================================================================================================= #
-def load_and_predict(file, tst_X, relevant_labels):
+def load_and_predict(file, tst_X, tst_relevant_labels):
     load_start_time = time.time()
     with open(file, 'rb') as fo:
         clf = cPickle.load(fo)
         print 'loading took {} seconds'.format(time.time() - load_start_time)
         score_time = time.time()
         print 'Rate = {}% ({} seconds)'.format(100*clf.score(tst_X,tst_relevant_labels), time.time() - score_time)
-        return clf.predict(tst_X).flatten()
+        return confusion_matrix(tst_relevant_labels, clf.predict(tst_X).flatten())
 
 # ============================================================================================================================================= #
+# create SIFT
 # unpickle test images
 # find KP with find_good_kp()
 # use them to find descriptors
@@ -156,19 +157,20 @@ def load_and_predict(file, tst_X, relevant_labels):
 # ============================================================================================================================================= #
 tst_start_time = time.time()
 
-tst = unpickle(test,True)    
-tst_images = tst.values()[0]
-tst_labels = tst.values()[1]
+sift = cv2.xfeatures2d.SIFT_create()
+
+tst = unpickle(test)    
+tst_images = tst.values()[0][:N]
+tst_labels = tst.values()[1][:N]
   
 tst_relevant_sized_descriptors = []
 tst_relevant_labels = [] 
-hopefully_good_kp = find_good_kp()
+
+tst_kp = find_good_kp(hueristic = 'dense')
 
 for im,lb in zip(tst_images, tst_labels):
     im = img_2_RGB(im)
-    
-    sift = cv2.xfeatures2d.SIFT_create()
-    kp,ds = sift.compute(im, hopefully_good_kp)
+    kp,ds = sift.compute(im, tst_kp)
     
     tst_relevant_sized_descriptors.append(ds.flatten())
     tst_relevant_labels.append(lb)
@@ -186,14 +188,14 @@ relevant_sized_descriptors = []
 relevant_labels = []
 
 for data in data_batch:
-    d = unpickle(data,True)
+    d = unpickle(data)
 
-    images = d.values()[0]
-    labels = d.values()[1]
+    images = d.values()[0][:N]
+    labels = d.values()[1][:N]
     
     for im,lb in zip(images, labels):
         im = img_2_RGB(im)
-        kp,ds = sift.compute(im, hopefully_good_kp)
+        kp,ds = sift.compute(im, tst_kp)
         relevant_sized_descriptors.append(ds.flatten())
         relevant_labels.append(lb)
 
@@ -229,18 +231,26 @@ del relevant_sized_descriptors
 del relevant_labels
 del X
 del y
-del clf
 del d
+del clf
 del images
 del labels
 del sift
 
 print '#' *50, '\n', 'phase 4: {} seconds '.format(time.time() - clean_start_time)
 # ============================================================================================================================================= #      
-# load and predict + confusion matrix
+# load and predict
 # ============================================================================================================================================= #
-print confusion_matrix(tst_relevant_labels, load_and_predict(clf_name))
+prediction_start_time = time.time()
+confusion_matrix = load_and_predict(clf_name, tst_X, tst_relevant_labels)
+
+del tst_X
+del tst_relevant_labels
+print '#' *50, '\n', 'phase 5: {} seconds '.format(time.time() - prediction_start_time)
+# ============================================================================================================================================= #      
 # end :-)
+# ============================================================================================================================================= #
 print('\a')
 print 'Done!\n\n'
 print '#' *50, '\n', 'total: {} seconds '.format(time.time() - start_time)
+print confusion_matrix
