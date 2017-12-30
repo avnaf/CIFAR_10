@@ -1,13 +1,21 @@
 # ============================================================================================================================================= #
 #Imports
+import os
 import cv2
 import numpy as np
 import time
+import cPickle
 from collections import Counter
+from sklearn.svm import SVC 
+from sklearn.metrics import confusion_matrix
 # ============================================================================================================================================= #
-
+# change the paths when running from another enviorment!!
 # ============================================================================================================================================= #
 #Globals:
+
+start_time = time.time()
+
+# paths
 batch_dir = r'C:\Users\Naftalis\Desktop\Computer Vision\Project\cifar-10-batches-py'
 data_1 = batch_dir + '\\' + r'data_batch_1'
 data_2 = batch_dir + '\\' + r'data_batch_2'
@@ -16,16 +24,12 @@ data_4 = batch_dir + '\\' + r'data_batch_4'
 data_5 = batch_dir + '\\' + r'data_batch_5'
 data_batch = [data_1, data_2, data_3, data_4, data_5]
 test = batch_dir + '\\' + r'test_batch'
+clf_name = r"C:\Users\Naftalis\Desktop\Computer Vision\Project\clf_dense"
+
+# labels for prediction
 predictions = []
 actuals = []
-#x_val = [2*i+1 for i in range(2)]
-#y_val = [2*i+1 for i in range(2)]
-#size_val = [i/2 for i in range(4)]
-#angle_val = [i for i in range(-90,90,90)]
-#print 'starting kp...'
-#g_key_points = [cv2.KeyPoint(x,y,size,angle) for x in x_val for y in y_val for size in size_val for angle in angle_val]
-#print 'num of kp: {}'.format(len(g_key_points))
-#print 'finished kp...'
+
 # ============================================================================================================================================= #
 
 # ============================================================================================================================================= #
@@ -45,7 +49,6 @@ def unpickle(file, print_msg = False):
     if print_msg:
         print 'starting unpickling {}...'.format(file[file.rfind('\\')+1:])
         
-    import cPickle
     with open(file, 'rb') as fo:
         dict = cPickle.load(fo)
         
@@ -68,269 +71,75 @@ def img_2_RGB(im, print_msg = False):
 
 # ============================================================================================================================================= #
 # input: image list, heading (optional), delay [mili-seconds] (optional)
+# for testing. Not used
 # ============================================================================================================================================= #
 def show_img(i, heading = '', delay = 1000):
     cv2.imshow(heading, i) 
     cv2.waitKey(delay)
     cv2.destroyAllWindows()
 # ============================================================================================================================================= #
-# 
+# finds good key-points for the classifier using one of many hueristics
 # ============================================================================================================================================= #
-def find_good_kp(num_of_test_images = 10000, hueristic = 'dense', num_of_images_to_sum = 3):
+def find_good_kp(hueristic = 'dense', num_of_images_to_sum = 3):
     #print num_of_test_images
     tst = unpickle(test)
     sift = cv2.xfeatures2d.SIFT_create()
-    tst_images = tst.values()[0][:num_of_test_images]
+    tst_images = tst.values()[0]
     good_kp = []
     
-#    for im in enumerate(tst_images):
-#        if im[0] < 133:
-#            continue
-#        print im[0], ', ', len(sift.detect(img_2_RGB(im[1]), None))
-#        show_img(cv2.resize(img_2_RGB(im[1]), (0,0), fx=10, fy=10), delay = 750)
-    
+    # find best image most KP, and use it
     if hueristic == 'richest image':
         max_kp = 0
         for im in enumerate(tst_images):
             im = img_2_RGB(im[1])
             kp = sift.detect(im, None)
-            #print kp, len(kp)
             if len(kp) > max_kp:
-                show_img(im)
                 max_kp = len(kp)
                 good_kp = kp
-                
+              
+    # use predetermined locations and size for KP (trying to "map" the center of the image as best as possible)                
     elif hueristic == 'dense':
-        W,H,s = 32,32,4
+        W,H,size = 32,32,4
         margin = 1
         step = 5
         for w in range(margin, W - margin, step):
             for h in range(margin, H - margin, step):
-                good_kp.append(cv2.KeyPoint(w,h,s))        
+                good_kp.append(cv2.KeyPoint(w,h,size))        
         
+    # for testing. Not used
     elif hueristic == 'specific image':
         for im in enumerate(tst_images):
-            # im[0] == 6: 0.5415
-            # im[0] == 8: 0.5395
-            # im[0] == 10: 0.5392
-            # im[0] == 12: 0.5375
-            # im[0] == 13: 0.5375
-            # im[0] == 58: 0.5529
-#            if im[0] < 59:
-#                continue
-#            print im[0], len(sift.detect(img_2_RGB(im[1]), None))
-#            show_img(cv2.resize(img_2_RGB(im[1]), (0,0),fx=15,fy=15),delay = 300)
-#            continue
             if im[0] == 65:
                 im = img_2_RGB(im[1])
                 good_kp = sift.detect(im, None)
                 show_img(cv2.resize(im, (0,0),fx=10,fy=10),delay = 2500)
                 break
-                
+    
+    # takes much longer time with no significant improvement. Not used            
     elif hueristic == 'several good images':  
         count = 0
         for im in enumerate(tst_images):
             img = img_2_RGB(im[1])
             kp = sift.detect(img, None)
-            if len(kp) >= 24:
-            # 0.5699% (65,58)
-            # 0.5717% (65,168)
-#            if im[0] == 65:#if im[0] == 168 or im[0] == 65:
+            if len(kp) >= 25:
                 good_kp += kp
                 count += 1
             if count == num_of_images_to_sum:
                 break
             
-    elif hueristic == 'several images':  
-        for im in enumerate(tst_images):
-            if im[0] == num_of_images_to_sum:
-                break
-            im = img_2_RGB(im[1])
-            kp = sift.detect(im, None)
-            good_kp += kp
-            
-    elif hueristic == 'good image for every class':
-        tst_labels = tst.values()[1][:num_of_test_images]
-        used_labels = []
-        for pair in enumerate(zip(tst_images, tst_labels)):
-            im = img_2_RGB(pair[1][0])
-            lb = pair[1][1]
-            if lb not in used_labels: #and len(sift.detect(im, None)) >= 10:
-                used_labels += [lb]
-                good_kp += sift.detect(im, None)
-            if len(used_labels) == 10:
-                break
-    elif hueristic == 'several runs':
-        for im in enumerate(tst_images):
-            im = img_2_RGB(im[1])
-            kp = sift.detect(im, None)
-            if len(kp) >= 25:
-                good_kp += [kp]
-            if len(good_kp == 5):
-                break
-        
-        
     del tst   
     del tst_images
     del sift
-    print '# of descriptors {}'.format(len(good_kp))
+#    print '# of descriptors {}'.format(len(good_kp))
     return good_kp
+
 # ============================================================================================================================================= #
-# Done only once
+# loads a classifier from file and scores it.
+# input:    tst_X               - the test cases
+#           tst_relevant_labels - the true labels
+# output: classifier prediction
 # ============================================================================================================================================= #
-tst = unpickle(test,True)    
-tst_size = 10000
-tst_images = tst.values()[0][:tst_size]
-tst_labels = tst.values()[1][:tst_size] 
-  
-tst_relevant_sized_descriptors = []
-tst_relevant_labels = [] 
-hopefully_good_kp = find_good_kp()
-
-for im,lb in zip(tst_images, tst_labels):
-    im = img_2_RGB(im)
-    
-    #old_kp = sift.detect(im, None)
-    sift = cv2.xfeatures2d.SIFT_create()
-    kp,ds = sift.compute(im, hopefully_good_kp)
-    
-    tst_relevant_sized_descriptors.append(ds.flatten())
-    tst_relevant_labels.append(lb)
-        
-tst_X = np.array(tst_relevant_sized_descriptors)
-test_size = len(tst_X)
-# ============================================================================================================================================= #
-
-def my_main(num_of_images_to_check, offset):
-    
-    global hopefully_good_kp
-    global test_size
-    global tst_X
-    global tst_relevant_labels
-    
-    start = time.time()
-    print '#'*100 
-    sift = cv2.xfeatures2d.SIFT_create()
-    print 'sift created...'
-    
-    data_set_counter = 0
-    
-    relevant_sized_descriptors = []
-    relevant_labels = []
-    
-    #print 'using {} descriptors'.format(num_of_des)
-    for data in data_batch:
-        data_set_counter += 1
-        d = unpickle(data,True)
-
-        images = d.values()[0][offset:offset + num_of_images_to_check]
-        labels = d.values()[1][offset:offset + num_of_images_to_check]
-        
-        print 'starting computing training {} descriptors...'.format(data_set_counter)
-        for im,lb in zip(images, labels):
-            im = img_2_RGB(im)
-            #old_kp = sift.detect(im, None)
-            kp,ds = sift.compute(im, hopefully_good_kp)
-            #if ds is not None and len(ds) == num_of_des:
-            relevant_sized_descriptors.append(ds.flatten())
-            relevant_labels.append(lb)
-        print 'finished computing training {} descriptors...'.format(data_set_counter)
-        print '#'*50 
-
-    X = np.array(relevant_sized_descriptors)
-    training_size = len(X)
-    y = np.array(relevant_labels)
-    
-    from sklearn.svm import SVC 
-    from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
-    clf = SVC(C = 0.001, kernel='poly', degree = 3, gamma = 0.001, cache_size = 1000)#best so far
-    clfs = []
-    #clfs += [LinearDiscriminantAnalysis()]                                                      #1
-    clfs += [LinearDiscriminantAnalysis(solver = 'lsqr', shrinkage = 'auto')]  
-    clfs = [clf]
-    #clfs = [clf]                 #2
-#    clfs += [LinearDiscriminantAnalysis(solver = 'lsqr', shrinkage = 0.2)]                      #3
-#    clfs += [LinearDiscriminantAnalysis(solver = 'lsqr', shrinkage = 0.5)]                      #4
-#    clfs += [LinearDiscriminantAnalysis(solver = 'lsqr', shrinkage = 0.8)]                      #5
-#    clfs += [LinearDiscriminantAnalysis(solver = 'lsqr', shrinkage = 1)]                        #6
-#    clfs += [LinearDiscriminantAnalysis(solver = 'eigen', shrinkage = 'auto')]                  #7
-#    clfs += [LinearDiscriminantAnalysis(solver = 'eigen', shrinkage = 0.2)]                     #8
-#    clfs += [LinearDiscriminantAnalysis(solver = 'eigen', shrinkage = 0.5)]                     #9
-#    clfs += [LinearDiscriminantAnalysis(solver = 'eigen', shrinkage = 0.8)]                     #10
-#    clfs += [LinearDiscriminantAnalysis(solver = 'eigen', shrinkage = 1)]                       #11
-
-    
-
-    
-    fit_start_time = time.time()
-    print 'starting fitting...' 
-    for clf in enumerate(clfs):
-        each_fit_start_time = time.time()
-        print 'start fit'
-        clf[1].fit(X,y)
-        print 'end   fit ({} seconds)'.format(time.time() - each_fit_start_time) 
-    print 'finished fitting... ({} seconds)'.format(time.time() - fit_start_time)
-    print '#'*50
-
-    import cPickle
-    pickle_clf_LDA_path =  r"C:\Users\Naftalis\Desktop\Computer Vision\Project\LDA_clf_images_65_and_168"
-    pickle_clf_svm_path =  r"C:\Users\Naftalis\Desktop\Computer Vision\Project\svm_clf_image_num_65"
-    pickle_clf_svm_path_2imgs =  r"C:\Users\Naftalis\Desktop\Computer Vision\Project\svm_clf_two_good_imagaes"
-    pickle_clf_svm_path_2imgs_100_ =  r"C:\Users\Naftalis\Desktop\Computer Vision\Project\svm_clf_two_good_imagaes_small_tst"
-    pickle_clf_svm_path_3imgs =  r"C:\Users\Naftalis\Desktop\Computer Vision\Project\svm_clf_three_good_imagaes"
-    pickle_dense_25_imgs = r"C:\Users\Naftalis\Desktop\Computer Vision\Project\svm_clf_dense_tst"
-    
-    cPickle.dump( clfs[0], open(pickle_dense_25_imgs, "wb" ) )
-    
-    #pickle.dump( clfs[0], open( "SVM_clf_images_65_and_168", "wb" ) )
-    
-
-# removed these for just the pickling
-#    global predictions
-#    global actuals
-#    for clf in enumerate(clfs):
-#        with open(pickle_clf_svm_path_2imgs_100_, 'rb') as fo:# remove this after pickling test
-#            clf = cPickle.load(fo)           # remove this after pickling test and return indentation for rest of lines
-#            score_time = time.time()
-##            print 'kernel # {}: training_size = {}, test_size = {}... Rate = {}% ({} seconds)'.format(clf[0]+1,training_size,test_size, clf[1].score(tst_X,tst_relevant_labels), time.time() - score_time)
-##            predictions.append(clf[1].predict(tst_X).flatten())
-#            print 'training_size = {}, test_size = {}... Rate = {}% ({} seconds)'.format(training_size,test_size, clf.score(tst_X,tst_relevant_labels), time.time() - score_time)
-#            predictions.append(clf.predict(tst_X).flatten())
-#
-#            # just for the 1st time. It doesn't change
-#            if not offset:
-#                actuals = relevant_labels
-            
-    
-        
-    #clean-up
-    del relevant_sized_descriptors
-    del relevant_labels
-    del X
-    del y
-    del clfs
-    del d
-    del images
-    del labels
-    del sift
-
-    end = time.time()
-    print 'time elapsed: {}'.format(end - start)
-    return end-start
-
-
-    
-size = 400
-for i in range(1):
-    print '#'
-    my_main(size,size*i)
-
-import os
-#print('\a')
-
-
-def load_and_predict(file):
-    import cPickle
+def load_and_predict(file, tst_X, relevant_labels):
     load_start_time = time.time()
     with open(file, 'rb') as fo:
         clf = cPickle.load(fo)
@@ -339,10 +148,99 @@ def load_and_predict(file):
         print 'Rate = {}% ({} seconds)'.format(100*clf.score(tst_X,tst_relevant_labels), time.time() - score_time)
         return clf.predict(tst_X).flatten()
 
-pickle_dense_25_imgs = r"C:\Users\Naftalis\Desktop\Computer Vision\Project\svm_clf_dense_tst"
-best = r"C:\Users\Naftalis\Desktop\Computer Vision\Project\svm_clf_image_num_65"
+# ============================================================================================================================================= #
+# unpickle test images
+# find KP with find_good_kp()
+# use them to find descriptors
+# insert to np.array
+# ============================================================================================================================================= #
+tst_start_time = time.time()
 
-#load_and_predict(best)
-from sklearn.metrics import confusion_matrix
-print confusion_matrix(tst_relevant_labels, load_and_predict(pickle_dense_25_imgs))
+tst = unpickle(test,True)    
+tst_images = tst.values()[0]
+tst_labels = tst.values()[1]
+  
+tst_relevant_sized_descriptors = []
+tst_relevant_labels = [] 
+hopefully_good_kp = find_good_kp()
+
+for im,lb in zip(tst_images, tst_labels):
+    im = img_2_RGB(im)
+    
+    sift = cv2.xfeatures2d.SIFT_create()
+    kp,ds = sift.compute(im, hopefully_good_kp)
+    
+    tst_relevant_sized_descriptors.append(ds.flatten())
+    tst_relevant_labels.append(lb)
+        
+tst_X = np.array(tst_relevant_sized_descriptors)
+test_size = len(tst_X)
+
+print '#' *50, '\n', 'phase 1: {} seconds'.format(time.time() - tst_start_time)
+# ============================================================================================================================================= #
+# unpickle each image batch and save into lists
+# ============================================================================================================================================= #
+batch_start_time = time.time()
+
+relevant_sized_descriptors = []
+relevant_labels = []
+
+for data in data_batch:
+    d = unpickle(data,True)
+
+    images = d.values()[0]
+    labels = d.values()[1]
+    
+    for im,lb in zip(images, labels):
+        im = img_2_RGB(im)
+        kp,ds = sift.compute(im, hopefully_good_kp)
+        relevant_sized_descriptors.append(ds.flatten())
+        relevant_labels.append(lb)
+
+print '#' *50, '\n', 'phase 2: {} seconds'.format(time.time() - batch_start_time)
+# ============================================================================================================================================= #
+# prepare data for classification
+# create classifier
+# fit data
+# pickle
+# ============================================================================================================================================= #
+fit_start_time = time.time()
+
+X = np.array(relevant_sized_descriptors)
+training_size = len(X)
+y = np.array(relevant_labels)
+
+# after many tests, this was found to be best classifier
+clf = SVC(C = 0.001, kernel='poly', degree = 3, gamma = 0.001, cache_size = 1000)
+clf.fit(X,y)
+
+# save classifier to file
+pickle_start_time = time.time()
+cPickle.dump(clf, open(clf_name, "wb" ) )      
+pickle_end_time = time.time()
+
+print '#' *50, '\n', 'phase 3: {} seconds (pickling took {})'.format(time.time() - fit_start_time, pickle_end_time - pickle_start_time)
+# ============================================================================================================================================= #      
+# clean-up
+# ============================================================================================================================================= #      
+clean_start_time = time.time()
+
+del relevant_sized_descriptors
+del relevant_labels
+del X
+del y
+del clf
+del d
+del images
+del labels
+del sift
+
+print '#' *50, '\n', 'phase 4: {} seconds '.format(time.time() - clean_start_time)
+# ============================================================================================================================================= #      
+# load and predict + confusion matrix
+# ============================================================================================================================================= #
+print confusion_matrix(tst_relevant_labels, load_and_predict(clf_name))
+# end :-)
 print('\a')
+print 'Done!\n\n'
+print '#' *50, '\n', 'total: {} seconds '.format(time.time() - start_time)
