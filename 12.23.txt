@@ -15,6 +15,9 @@ from sklearn.metrics import confusion_matrix
 
 start_time = time.time()
 
+# number of images to check. For testing. 10000 is the value for a real run
+N = 10000
+
 # paths
 batch_dir = r'C:\Users\Naftalis\Desktop\Computer Vision\Project\cifar-10-batches-py'
 data_1 = batch_dir + '\\' + r'data_batch_1'
@@ -25,7 +28,7 @@ data_5 = batch_dir + '\\' + r'data_batch_5'
 data_batch = [data_1, data_2, data_3, data_4, data_5]
 test = batch_dir + '\\' + r'test_batch'
 clf_name = r"C:\Users\Naftalis\Desktop\Computer Vision\Project\clf_dense"
-N = 300
+
 # labels for prediction
 predictions = []
 actuals = []
@@ -87,7 +90,7 @@ def find_good_kp(hueristic = 'dense', num_of_images_to_sum = 3):
     tst_images = tst.values()[0]
     good_kp = []
     
-    # find best image most KP, and use it
+    # find best image (with most KP), and use it
     if hueristic == 'richest image':
         max_kp = 0
         for im in enumerate(tst_images):
@@ -97,7 +100,7 @@ def find_good_kp(hueristic = 'dense', num_of_images_to_sum = 3):
                 max_kp = len(kp)
                 good_kp = kp
               
-    # use predetermined locations and size for KP (trying to "map" the center of the image as best as possible)                
+    # use predetermined locations and size for KP (trying to catch good KP in the image)                
     elif hueristic == 'dense':
         W,H,size = 32,32,4
         margin = 1
@@ -178,7 +181,7 @@ for im,lb in zip(tst_images, tst_labels):
 tst_X = np.array(tst_relevant_sized_descriptors)
 test_size = len(tst_X)
 
-print '#' *50, '\n', 'phase 1: {} seconds'.format(time.time() - tst_start_time)
+print '#' *50, '\n', 'test images - phase 1: {} seconds'.format(time.time() - tst_start_time)
 # ============================================================================================================================================= #
 # unpickle each image batch and save into lists
 # ============================================================================================================================================= #
@@ -199,7 +202,7 @@ for data in data_batch:
         relevant_sized_descriptors.append(ds.flatten())
         relevant_labels.append(lb)
 
-print '#' *50, '\n', 'phase 2: {} seconds'.format(time.time() - batch_start_time)
+print '#' *50, '\n', 'training images - phase 2: {} seconds'.format(time.time() - batch_start_time)
 # ============================================================================================================================================= #
 # prepare data for classification
 # create classifier
@@ -221,7 +224,7 @@ pickle_start_time = time.time()
 cPickle.dump(clf, open(clf_name, "wb" ) )      
 pickle_end_time = time.time()
 
-print '#' *50, '\n', 'phase 3: {} seconds (pickling took {})'.format(time.time() - fit_start_time, pickle_end_time - pickle_start_time)
+print '#' *50, '\n', 'fitting - phase 3: {} seconds (pickling took {})'.format(time.time() - fit_start_time, pickle_end_time - pickle_start_time)
 # ============================================================================================================================================= #      
 # clean-up
 # ============================================================================================================================================= #      
@@ -237,7 +240,7 @@ del images
 del labels
 del sift
 
-print '#' *50, '\n', 'phase 4: {} seconds '.format(time.time() - clean_start_time)
+print '#' *50, '\n', 'clean up - phase 4: {} seconds '.format(time.time() - clean_start_time)
 # ============================================================================================================================================= #      
 # load and predict
 # ============================================================================================================================================= #
@@ -246,7 +249,7 @@ confusion_matrix = load_and_predict(clf_name, tst_X, tst_relevant_labels)
 
 del tst_X
 del tst_relevant_labels
-print '#' *50, '\n', 'phase 5: {} seconds '.format(time.time() - prediction_start_time)
+print '#' *50, '\n', 'prediction: {} seconds '.format(time.time() - prediction_start_time)
 # ============================================================================================================================================= #      
 # end :-)
 # ============================================================================================================================================= #
