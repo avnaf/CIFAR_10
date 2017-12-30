@@ -76,7 +76,7 @@ def show_img(i, heading = '', delay = 1000):
 # ============================================================================================================================================= #
 # 
 # ============================================================================================================================================= #
-def find_good_kp(num_of_test_images = 10000, hueristic = 'several good images', num_of_images_to_sum = 2):
+def find_good_kp(num_of_test_images = 10000, hueristic = 'dense', num_of_images_to_sum = 3):
     #print num_of_test_images
     tst = unpickle(test)
     sift = cv2.xfeatures2d.SIFT_create()
@@ -100,6 +100,14 @@ def find_good_kp(num_of_test_images = 10000, hueristic = 'several good images', 
                 max_kp = len(kp)
                 good_kp = kp
                 
+    elif hueristic == 'dense':
+        W,H,s = 32,32,4
+        margin = 1
+        step = 5
+        for w in range(margin, W - margin, step):
+            for h in range(margin, H - margin, step):
+                good_kp.append(cv2.KeyPoint(w,h,s))        
+        
     elif hueristic == 'specific image':
         for im in enumerate(tst_images):
             # im[0] == 6: 0.5415
@@ -108,12 +116,12 @@ def find_good_kp(num_of_test_images = 10000, hueristic = 'several good images', 
             # im[0] == 12: 0.5375
             # im[0] == 13: 0.5375
             # im[0] == 58: 0.5529
-            if im[0] < 59:
-                continue
-            print im[0], len(sift.detect(img_2_RGB(im[1]), None))
-            show_img(cv2.resize(img_2_RGB(im[1]), (0,0),fx=15,fy=15),delay = 300)
-            continue
-            if im[0] == 58:
+#            if im[0] < 59:
+#                continue
+#            print im[0], len(sift.detect(img_2_RGB(im[1]), None))
+#            show_img(cv2.resize(img_2_RGB(im[1]), (0,0),fx=15,fy=15),delay = 300)
+#            continue
+            if im[0] == 65:
                 im = img_2_RGB(im[1])
                 good_kp = sift.detect(im, None)
                 show_img(cv2.resize(im, (0,0),fx=10,fy=10),delay = 2500)
@@ -124,10 +132,10 @@ def find_good_kp(num_of_test_images = 10000, hueristic = 'several good images', 
         for im in enumerate(tst_images):
             img = img_2_RGB(im[1])
             kp = sift.detect(img, None)
-#            if len(kp) >= 20:
+            if len(kp) >= 24:
             # 0.5699% (65,58)
             # 0.5717% (65,168)
-            if im[0] == 168 or im[0] == 65:
+#            if im[0] == 65:#if im[0] == 168 or im[0] == 65:
                 good_kp += kp
                 count += 1
             if count == num_of_images_to_sum:
@@ -162,7 +170,7 @@ def find_good_kp(num_of_test_images = 10000, hueristic = 'several good images', 
                 break
         
         
-        
+    del tst   
     del tst_images
     del sift
     print '# of descriptors {}'.format(len(good_kp))
@@ -235,11 +243,12 @@ def my_main(num_of_images_to_check, offset):
     
     from sklearn.svm import SVC 
     from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
-    
-    clf = SVC(C = 0.001, kernel='poly', degree = 3, gamma = 0.001, probability=True)#best so far
+    clf = SVC(C = 0.001, kernel='poly', degree = 3, gamma = 0.001, cache_size = 1000)#best so far
     clfs = []
     #clfs += [LinearDiscriminantAnalysis()]                                                      #1
-    clfs += [LinearDiscriminantAnalysis(solver = 'lsqr', shrinkage = 'auto')]                   #2
+    clfs += [LinearDiscriminantAnalysis(solver = 'lsqr', shrinkage = 'auto')]  
+    clfs = [clf]
+    #clfs = [clf]                 #2
 #    clfs += [LinearDiscriminantAnalysis(solver = 'lsqr', shrinkage = 0.2)]                      #3
 #    clfs += [LinearDiscriminantAnalysis(solver = 'lsqr', shrinkage = 0.5)]                      #4
 #    clfs += [LinearDiscriminantAnalysis(solver = 'lsqr', shrinkage = 0.8)]                      #5
@@ -263,15 +272,34 @@ def my_main(num_of_images_to_check, offset):
     print 'finished fitting... ({} seconds)'.format(time.time() - fit_start_time)
     print '#'*50
 
-    global predictions
-    global actuals
-    for clf in enumerate(clfs):
-        score_time = time.time()
-        print 'kernel # {}: training_size = {}, test_size = {}... Rate = {}% ({} seconds)'.format(clf[0]+1,training_size,test_size, clf[1].score(tst_X,tst_relevant_labels), time.time() - score_time)
-        predictions.append(clf[1].predict(tst_X).flatten())
-        # just for the 1st time. It doesn't change
-        if not offset:
-            actuals = relevant_labels
+    import cPickle
+    pickle_clf_LDA_path =  r"C:\Users\Naftalis\Desktop\Computer Vision\Project\LDA_clf_images_65_and_168"
+    pickle_clf_svm_path =  r"C:\Users\Naftalis\Desktop\Computer Vision\Project\svm_clf_image_num_65"
+    pickle_clf_svm_path_2imgs =  r"C:\Users\Naftalis\Desktop\Computer Vision\Project\svm_clf_two_good_imagaes"
+    pickle_clf_svm_path_2imgs_100_ =  r"C:\Users\Naftalis\Desktop\Computer Vision\Project\svm_clf_two_good_imagaes_small_tst"
+    pickle_clf_svm_path_3imgs =  r"C:\Users\Naftalis\Desktop\Computer Vision\Project\svm_clf_three_good_imagaes"
+    pickle_dense_25_imgs = r"C:\Users\Naftalis\Desktop\Computer Vision\Project\svm_clf_dense_tst"
+    
+    cPickle.dump( clfs[0], open(pickle_dense_25_imgs, "wb" ) )
+    
+    #pickle.dump( clfs[0], open( "SVM_clf_images_65_and_168", "wb" ) )
+    
+
+# removed these for just the pickling
+#    global predictions
+#    global actuals
+#    for clf in enumerate(clfs):
+#        with open(pickle_clf_svm_path_2imgs_100_, 'rb') as fo:# remove this after pickling test
+#            clf = cPickle.load(fo)           # remove this after pickling test and return indentation for rest of lines
+#            score_time = time.time()
+##            print 'kernel # {}: training_size = {}, test_size = {}... Rate = {}% ({} seconds)'.format(clf[0]+1,training_size,test_size, clf[1].score(tst_X,tst_relevant_labels), time.time() - score_time)
+##            predictions.append(clf[1].predict(tst_X).flatten())
+#            print 'training_size = {}, test_size = {}... Rate = {}% ({} seconds)'.format(training_size,test_size, clf.score(tst_X,tst_relevant_labels), time.time() - score_time)
+#            predictions.append(clf.predict(tst_X).flatten())
+#
+#            # just for the 1st time. It doesn't change
+#            if not offset:
+#                actuals = relevant_labels
             
     
         
@@ -280,7 +308,7 @@ def my_main(num_of_images_to_check, offset):
     del relevant_labels
     del X
     del y
-    del clf
+    del clfs
     del d
     del images
     del labels
@@ -292,10 +320,29 @@ def my_main(num_of_images_to_check, offset):
 
 
     
-size = 10000
+size = 400
 for i in range(1):
     print '#'
     my_main(size,size*i)
 
 import os
+#print('\a')
+
+
+def load_and_predict(file):
+    import cPickle
+    load_start_time = time.time()
+    with open(file, 'rb') as fo:
+        clf = cPickle.load(fo)
+        print 'loading took {} seconds'.format(time.time() - load_start_time)
+        score_time = time.time()
+        print 'Rate = {}% ({} seconds)'.format(100*clf.score(tst_X,tst_relevant_labels), time.time() - score_time)
+        return clf.predict(tst_X).flatten()
+
+pickle_dense_25_imgs = r"C:\Users\Naftalis\Desktop\Computer Vision\Project\svm_clf_dense_tst"
+best = r"C:\Users\Naftalis\Desktop\Computer Vision\Project\svm_clf_image_num_65"
+
+#load_and_predict(best)
+from sklearn.metrics import confusion_matrix
+print confusion_matrix(tst_relevant_labels, load_and_predict(pickle_dense_25_imgs))
 print('\a')
