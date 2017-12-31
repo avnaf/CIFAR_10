@@ -216,7 +216,7 @@ training_size = len(X)
 y = np.array(relevant_labels)
 
 # after many tests, this was found to be best classifier
-clf = SVC(C = 0.001, kernel='poly', degree = 3, gamma = 0.001, cache_size = 1000)
+clf = SVC(C = 0.01, kernel='poly')
 clf.fit(X,y)
 
 # save classifier to file
