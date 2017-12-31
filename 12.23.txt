@@ -1,11 +1,9 @@
 # ============================================================================================================================================= #
 #Imports
-import os
 import cv2
 import numpy as np
 import time
 import cPickle
-from collections import Counter
 from sklearn.svm import SVC 
 from sklearn.metrics import confusion_matrix
 # ============================================================================================================================================= #
@@ -143,12 +141,14 @@ def find_good_kp(hueristic = 'dense', num_of_images_to_sum = 3):
 # output: classifier prediction
 # ============================================================================================================================================= #
 def load_and_predict(file, tst_X, tst_relevant_labels):
+    print '#' *50, '\n'
     load_start_time = time.time()
     with open(file, 'rb') as fo:
         clf = cPickle.load(fo)
         print 'loading took {} seconds'.format(time.time() - load_start_time)
         score_time = time.time()
         print 'Rate = {}% ({} seconds)'.format(100*clf.score(tst_X,tst_relevant_labels), time.time() - score_time)
+        print '#' *50, '\n'
         return confusion_matrix(tst_relevant_labels, clf.predict(tst_X).flatten())
 
 # ============================================================================================================================================= #
@@ -221,7 +221,7 @@ clf.fit(X,y)
 
 # save classifier to file
 pickle_start_time = time.time()
-cPickle.dump(clf, open(clf_name, "wb" ) )      
+cPickle.dump(clf, open(clf_name, "wb" ),  protocol = cPickle.HIGHEST_PROTOCOL) 
 pickle_end_time = time.time()
 
 print '#' *50, '\n', 'fitting - phase 3: {} seconds (pickling took {})'.format(time.time() - fit_start_time, pickle_end_time - pickle_start_time)
