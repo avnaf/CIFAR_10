@@ -7,7 +7,7 @@ import cPickle
 from sklearn.svm import SVC 
 from sklearn.metrics import confusion_matrix
 # ============================================================================================================================================= #
-
+N = 10000
 # ============================================================================================================================================= #
 # dict = {data : lables}
 # data = 10000*3072 numpy array of uint8
@@ -57,17 +57,17 @@ def show_img(i, heading = '', delay = 1000):
 # ============================================================================================================================================= #
 # finds good key-points for the classifier using one of many hueristics
 # ============================================================================================================================================= #
-def find_good_kp(hueristic = 'richest image', num_of_images_to_sum = 3):
+def find_good_kp(test_imgs_path, hueristic = 'richest image'):
     #print num_of_test_images
-    tst = unpickle(test)
+    d = unpickle(test_imgs_path)    
+    images = d.values()[0]
     sift = cv2.xfeatures2d.SIFT_create()
-    tst_images = tst.values()[0]
     good_kp = []
     
     # find best image (with most KP), and use it
     if hueristic == 'richest image':
         max_kp = 0
-        for im in enumerate(tst_images):
+        for im in enumerate(images):
             im = img_2_RGB(im[1])
             kp = sift.detect(im, None)
             if len(kp) > max_kp:
@@ -83,21 +83,21 @@ def find_good_kp(hueristic = 'richest image', num_of_images_to_sum = 3):
         good_kp = [cv2.KeyPoint(w,h,size) for w in range(margin, W - margin, step) for h in range(margin, H - margin, step)]
           
     # takes much longer time with no significant improvement. Not used            
-    elif hueristic == 'several good images':  
-        count = 0
-        for im in enumerate(tst_images):
-            img = img_2_RGB(im[1])
-            kp = sift.detect(img, None)
-            if len(kp) >= 25:
-                good_kp += kp
-                count += 1
-            if count == num_of_images_to_sum:
-                break
+#    elif hueristic == 'several good images':  
+#        count = 0
+#        for im in enumerate(tst_images):
+#            img = img_2_RGB(im[1])
+#            kp = sift.detect(img, None)
+#            if len(kp) >= 25:
+#                good_kp += kp
+#                count += 1
+#            if count == num_of_images_to_sum:
+#                break
             
-    del tst   
-    del tst_images
+    del d   
+    del images
     del sift
-    print '# of descriptors {}'.format(len(good_kp))
+#    print '# of descriptors {}'.format(len(good_kp))
     return good_kp
 
 # ============================================================================================================================================= #      
@@ -108,6 +108,7 @@ def find_good_kp(hueristic = 'richest image', num_of_images_to_sum = 3):
 # return descriptors as np.array, labels list, time
 # ============================================================================================================================================= #
 def img_2_descriptors(sift, kp, imgs_path):
+    global N #for debug. should be 10000 for normal runs
     start_time = time.time()
 
     descriptors = []
@@ -155,44 +156,44 @@ def train_clf(X,y,clf_name):
     return time.time() - start_time
 
 # ============================================================================================================================================= #      
-# input: data_batch (file paths for data images), clf_name (path to save the classifier into)
+# input: data_batch (file paths for data images), clf_name (path to save the classifier into), test (test images path)
 # creates sift
 # gets key-points
 # calls img_2_descriptors & train_clf
 # prints timings
 # ============================================================================================================================================= #
-def train_and_save(data_batch, clf_name):
+def train_and_save(data_batch, clf_name, test):
     start_time = time.time()
     sift, sift_time = cv2.xfeatures2d.SIFT_create(), time.time()
     print 'sift created... {} seconds'.format(sift_time - start_time)
-    kp, kp_time = find_good_kp(), time.time()
+    kp, kp_time = find_good_kp(test_imgs_path = test), time.time()
     print 'key-points generated... {} seconds'.format(kp_time - sift_time)
     X,y,descriptors_time = img_2_descriptors(sift, kp, data_batch)
-    print 'descriptors generated... {} seconds'.format(descriptors_time - kp_time)
+    print 'descriptors generated... {} seconds'.format(descriptors_time)
     training_time = train_clf(X,y,clf_name)
     print 'clf trained and pickled... {} seconds'.format(training_time - descriptors_time)
 
 # ============================================================================================================================================= #
-# input: test_file (image file to test), clf_name (classifier to load and predict with), use_score [optional]
+# input: test (image file to test), clf_name (classifier to load and predict with), use_score [optional]
 # creates sift
 # gets key-points
 # unpickles the classifier
 # uses score(), predict(), confusion_matrix()
 # prints timings
 # ============================================================================================================================================= #
-def load_and_predict(test_file, clf_name, use_score = False, use_predict = False):
+def load_and_predict(test, clf_name, use_score = False, use_predict = False):
     start_time = time.time()
     sift, sift_time = cv2.xfeatures2d.SIFT_create(), time.time()
     print 'sift created... {} seconds'.format(sift_time - start_time)
-    kp, kp_time = find_good_kp(), time.time()
+    kp, kp_time = find_good_kp(test_imgs_path = test), time.time()
     with open(clf_name, 'rb') as fo:
          clf, load_time = cPickle.load(fo), time.time()
          print 'classifier loaded... {} seconds'.format(load_time - kp_time)
-         X,y,descriptors_time = img_2_descriptors(sift, kp, test_file)
+         X,y,descriptors_time = img_2_descriptors(sift, kp, test)
          print 'descriptors generated... {} seconds'.format(descriptors_time - load_time)
          if use_score:
             print '#'*50, '\nRate = {}%'.format(100*clf.score(X,y))
-        if use_predict:
+         if use_predict:
             print '#'*50, '\confusion matrix:\n{}\n{} seconds'.format(confusion_matrix(y, clf.predict(X).flatten()), time.time() - descriptors_time)
 
 # ============================================================================================================================================= #      
@@ -211,51 +212,58 @@ def main():
     test = batch_dir + r'\test_batch'
     clf_name = project_dir + r'\clf_richest_img'
 
-    in = input('What would you like to do?\n1 --------- train classifier and save it\n2 --------- load classifier and predict test images\n3 --------- exit\n')
+    inp = input('What would you like to do?\n1 --------- train classifier and save it\n2 --------- load classifier and predict test images\n3 --------- exit\n')
     
-    if in == 1:
+    if inp == 1:
         print 'Make sure the paths for the data batches and the classifier are correct. If not, quit now, change the and re-launch\n'
         print 'These are the current data paths:\n'
         for data in data_batch:
             print '{}\n'.format(data)
+        print 'This is the current test path:\n\t"{}"'.format(test)
         print 'This is the current path for a classifier to be saved. Make sure it does not overwrite an existing one:\n{}'.format(clf_name)
 
         while True:
-            in = input('Continue?\t[y/n]')
-            if in =='n' or in =='N':
+            inp = raw_input('Continue?\t[y/n]\t')
+            if inp =='n' or inp =='N':
                 return
-            elif in == 'y' or in == 'Y':
-                train_and_save(data_batch, clf_name)
+            elif inp == 'y' or inp == 'Y':
+                print '\n'
+                train_and_save(data_batch, clf_name, test)
 
-    elif in == 2:
-        print 'Make sure the paths for the test batch and the classifier are correct. If not, quit now, change the and re-launch\n'
-        print 'This is the current test path:\n{}'.format(test)
-        print 'This is the current path for a classifier to be loaded:\n{}'.format(clf_name)
+    elif inp == 2:
+        print '\nMake sure the paths for the test batch and the classifier are correct. If not, quit now, change the and re-launch\n'
+        print 'This is the current test path:\n\t"{}"'.format(test)
+        print 'This is the current path for a classifier to be loaded:\n\t"{}"'.format(clf_name)
         
         while True:
-            in = input('Continue?\t[y/n]')
-            if in =='n' or in =='N':
+            inp = raw_input('Continue?\t[y/n]\t')
+            if inp =='n' or inp =='N':
                 return
-            elif in == 'y'or in == 'Y':
+            elif inp == 'y'or inp == 'Y':
+                use_score = False
+                use_predict = False
                 while True:
-                    in = input('use predict (comes with confusion matrix)?\t[y/n]')
-                    if in == 'y' or in == 'Y':
+                    inp = raw_input('use predict (comes with confusion matrix)?\t[y/n]\t')
+                    if inp == 'y' or inp == 'Y':
                         use_predict = True
-                    if in == 'n' or in =='N':
+                        break
+                    if inp == 'n' or inp =='N':
                         break
                 while True:
-                    in = input('use score (accuracy rate in percents)?\t[y/n]')
-                    if in == 'y' or in == 'Y':
+                    inp = raw_input('use score (accuracy rate in percents)?\t[y/n]\t')
+                    if inp == 'y' or inp == 'Y':
                         use_score = True
-                    if in == 'n' or in =='N':
+                        break
+                    if inp == 'n' or inp =='N':
                         break   
                 if not use_predict and not use_score:
                     use_score = True
+                print '\n'
                 # the function has both score & predict functions. Each takes ~1800 seconds. predict is relevant for 
                 # confusion matrix. score is relevant for accuracy percentage. At least one should be True
                 load_and_predict(test, clf_name, use_score, use_predict)
 
-    elif in == 3:
+    elif inp == 3:
         print 'Bye Bye!\n'
         return
 
