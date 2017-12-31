@@ -7,31 +7,6 @@ import cPickle
 from sklearn.svm import SVC 
 from sklearn.metrics import confusion_matrix
 # ============================================================================================================================================= #
-# change the paths when running from another enviorment!!
-# ============================================================================================================================================= #
-#Globals:
-
-start_time = time.time()
-
-# number of images to check. For testing. 10000 is the value for a real run
-N = 10000
-
-# paths
-batch_dir = r'C:\Users\Naftalis\Desktop\Computer Vision\Project\cifar-10-batches-py'
-data_1 = batch_dir + '\\' + r'data_batch_1'
-data_2 = batch_dir + '\\' + r'data_batch_2'
-data_3 = batch_dir + '\\' + r'data_batch_3'
-data_4 = batch_dir + '\\' + r'data_batch_4'
-data_5 = batch_dir + '\\' + r'data_batch_5'
-data_batch = [data_1, data_2, data_3, data_4, data_5]
-test = batch_dir + '\\' + r'test_batch'
-clf_name = r"C:\Users\Naftalis\Desktop\Computer Vision\Project\clf_dense"
-
-# labels for prediction
-predictions = []
-actuals = []
-
-# ============================================================================================================================================= #
 
 # ============================================================================================================================================= #
 # dict = {data : lables}
@@ -78,10 +53,11 @@ def show_img(i, heading = '', delay = 1000):
     cv2.imshow(heading, i) 
     cv2.waitKey(delay)
     cv2.destroyAllWindows()
+
 # ============================================================================================================================================= #
 # finds good key-points for the classifier using one of many hueristics
 # ============================================================================================================================================= #
-def find_good_kp(hueristic = 'dense', num_of_images_to_sum = 3):
+def find_good_kp(hueristic = 'richest image', num_of_images_to_sum = 3):
     #print num_of_test_images
     tst = unpickle(test)
     sift = cv2.xfeatures2d.SIFT_create()
@@ -100,22 +76,12 @@ def find_good_kp(hueristic = 'dense', num_of_images_to_sum = 3):
               
     # use predetermined locations and size for KP (trying to catch good KP in the image)                
     elif hueristic == 'dense':
-        W,H,size = 32,32,4
+        W,H = 32,32
         margin = 1
         step = 5
-        for w in range(margin, W - margin, step):
-            for h in range(margin, H - margin, step):
-                good_kp.append(cv2.KeyPoint(w,h,size))        
-        
-    # for testing. Not used
-    elif hueristic == 'specific image':
-        for im in enumerate(tst_images):
-            if im[0] == 65:
-                im = img_2_RGB(im[1])
-                good_kp = sift.detect(im, None)
-                show_img(cv2.resize(im, (0,0),fx=10,fy=10),delay = 2500)
-                break
-    
+        size = 4
+        good_kp = [cv2.KeyPoint(w,h,size) for w in range(margin, W - margin, step) for h in range(margin, H - margin, step)]
+          
     # takes much longer time with no significant improvement. Not used            
     elif hueristic == 'several good images':  
         count = 0
@@ -134,126 +100,164 @@ def find_good_kp(hueristic = 'dense', num_of_images_to_sum = 3):
     print '# of descriptors {}'.format(len(good_kp))
     return good_kp
 
+# ============================================================================================================================================= #      
+# input: sift, images path (can be list of paths), key-points to be used by sift, num_of_image_sets
+# unpickles each data set
+# uses sift to extract descriptors and appends into list
+# appends labels into 2nd list
+# return descriptors as np.array, labels list, time
 # ============================================================================================================================================= #
-# loads a classifier from file and scores it.
-# input:    tst_X               - the test cases
-#           tst_relevant_labels - the true labels
-# output: classifier prediction
+def img_2_descriptors(sift, kp, imgs_path):
+    start_time = time.time()
+
+    descriptors = []
+    labels = [] 
+
+    if type(imgs_path) == list:
+        for img_path in imgs_path:
+            d = unpickle(imgs_path)    
+            images = d.values()[0][:N]
+            labels = d.values()[1][:N]  
+
+            for im,lb in zip(images, labels):
+                im = img_2_RGB(im)
+                kp,ds = sift.compute(im, kp)
+                
+                descriptors.append(ds.flatten())
+                labels.append(lb)
+    else:
+        d = unpickle(imgs_path)    
+        images = d.values()[0][:N]
+        labels = d.values()[1][:N]  
+
+        for im,lb in zip(images, labels):
+            im = img_2_RGB(im)
+            kp,ds = sift.compute(im, kp)
+            
+            descriptors.append(ds.flatten())
+            labels.append(lb)
+            
+    return np.array(descriptors), labels, time.time() - start_time
+
+# ============================================================================================================================================= #      
+# input: X (training data), y (training labels), clf_name (path to where clf should be saved)
+# creates SVM
+# fits the data
+# pickles
 # ============================================================================================================================================= #
-def load_and_predict(file, tst_X, tst_relevant_labels):
-    print '#' *50, '\n'
-    load_start_time = time.time()
-    with open(file, 'rb') as fo:
-        clf = cPickle.load(fo)
-        print 'loading took {} seconds'.format(time.time() - load_start_time)
-        score_time = time.time()
-        print 'Rate = {}% ({} seconds)'.format(100*clf.score(tst_X,tst_relevant_labels), time.time() - score_time)
-        print '#' *50, '\n'
-        return confusion_matrix(tst_relevant_labels, clf.predict(tst_X).flatten())
+def train_clf(X,y,clf_name):
+    start_time = time.time()
+    # after many tests, this was found to be best classifier
+    clf = SVC(C = 0.01, kernel='poly')
+    clf.fit(X,y)
+    with open(clf_name, "wb" ) as fo:
+        cPickle.dump(clf, fo,  protocol = cPickle.HIGHEST_PROTOCOL) 
+    return time.time() - start_time
+
+# ============================================================================================================================================= #      
+# input: data_batch (file paths for data images), clf_name (path to save the classifier into)
+# creates sift
+# gets key-points
+# calls img_2_descriptors & train_clf
+# prints timings
+# ============================================================================================================================================= #
+def train_and_save(data_batch, clf_name):
+    start_time = time.time()
+    sift, sift_time = cv2.xfeatures2d.SIFT_create(), time.time()
+    print 'sift created... {} seconds'.format(sift_time - start_time)
+    kp, kp_time = find_good_kp(), time.time()
+    print 'key-points generated... {} seconds'.format(kp_time - sift_time)
+    X,y,descriptors_time = img_2_descriptors(sift, kp, data_batch)
+    print 'descriptors generated... {} seconds'.format(descriptors_time - kp_time)
+    training_time = train_clf(X,y,clf_name)
+    print 'clf trained and pickled... {} seconds'.format(training_time - descriptors_time)
 
 # ============================================================================================================================================= #
-# create SIFT
-# unpickle test images
-# find KP with find_good_kp()
-# use them to find descriptors
-# insert to np.array
+# input: test_file (image file to test), clf_name (classifier to load and predict with), use_score [optional]
+# creates sift
+# gets key-points
+# unpickles the classifier
+# uses score(), predict(), confusion_matrix()
+# prints timings
 # ============================================================================================================================================= #
-tst_start_time = time.time()
+def load_and_predict(test_file, clf_name, use_score = False, use_predict = False):
+    start_time = time.time()
+    sift, sift_time = cv2.xfeatures2d.SIFT_create(), time.time()
+    print 'sift created... {} seconds'.format(sift_time - start_time)
+    kp, kp_time = find_good_kp(), time.time()
+    with open(clf_name, 'rb') as fo:
+         clf, load_time = cPickle.load(fo), time.time()
+         print 'classifier loaded... {} seconds'.format(load_time - kp_time)
+         X,y,descriptors_time = img_2_descriptors(sift, kp, test_file)
+         print 'descriptors generated... {} seconds'.format(descriptors_time - load_time)
+         if use_score:
+            print '#'*50, '\nRate = {}%'.format(100*clf.score(X,y))
+        if use_predict:
+            print '#'*50, '\confusion matrix:\n{}\n{} seconds'.format(confusion_matrix(y, clf.predict(X).flatten()), time.time() - descriptors_time)
 
-sift = cv2.xfeatures2d.SIFT_create()
+# ============================================================================================================================================= #      
+# Allows user to train & save a classifier OR to load and predict
+# ============================================================================================================================================= #
+def main():
 
-tst = unpickle(test)    
-tst_images = tst.values()[0][:N]
-tst_labels = tst.values()[1][:N]
-  
-tst_relevant_sized_descriptors = []
-tst_relevant_labels = [] 
+    project_dir = r'C:\Users\avi_na\project_CIFAR_10'
+    batch_dir = project_dir+ r'\cifar-10-batches-py'
+    data_1 = batch_dir + r'\data_batch_1'
+    data_2 = batch_dir + r'\data_batch_2'
+    data_3 = batch_dir + r'\data_batch_3'
+    data_4 = batch_dir + r'\data_batch_4'
+    data_5 = batch_dir + r'\data_batch_5'
+    data_batch = [data_1, data_2, data_3, data_4, data_5]
+    test = batch_dir + r'\test_batch'
+    clf_name = project_dir + r'\clf_richest_img'
 
-tst_kp = find_good_kp(hueristic = 'dense')
-
-for im,lb in zip(tst_images, tst_labels):
-    im = img_2_RGB(im)
-    kp,ds = sift.compute(im, tst_kp)
+    in = input('What would you like to do?\n1 --------- train classifier and save it\n2 --------- load classifier and predict test images\n3 --------- exit\n')
     
-    tst_relevant_sized_descriptors.append(ds.flatten())
-    tst_relevant_labels.append(lb)
+    if in == 1:
+        print 'Make sure the paths for the data batches and the classifier are correct. If not, quit now, change the and re-launch\n'
+        print 'These are the current data paths:\n'
+        for data in data_batch:
+            print '{}\n'.format(data)
+        print 'This is the current path for a classifier to be saved. Make sure it does not overwrite an existing one:\n{}'.format(clf_name)
+
+        while True:
+            in = input('Continue?\t[y/n]')
+            if in =='n' or in =='N':
+                return
+            elif in == 'y' or in == 'Y':
+                train_and_save(data_batch, clf_name)
+
+    elif in == 2:
+        print 'Make sure the paths for the test batch and the classifier are correct. If not, quit now, change the and re-launch\n'
+        print 'This is the current test path:\n{}'.format(test)
+        print 'This is the current path for a classifier to be loaded:\n{}'.format(clf_name)
         
-tst_X = np.array(tst_relevant_sized_descriptors)
-test_size = len(tst_X)
+        while True:
+            in = input('Continue?\t[y/n]')
+            if in =='n' or in =='N':
+                return
+            elif in == 'y'or in == 'Y':
+                while True:
+                    in = input('use predict (comes with confusion matrix)?\t[y/n]')
+                    if in == 'y' or in == 'Y':
+                        use_predict = True
+                    if in == 'n' or in =='N':
+                        break
+                while True:
+                    in = input('use score (accuracy rate in percents)?\t[y/n]')
+                    if in == 'y' or in == 'Y':
+                        use_score = True
+                    if in == 'n' or in =='N':
+                        break   
+                if not use_predict and not use_score:
+                    use_score = True
+                # the function has both score & predict functions. Each takes ~1800 seconds. predict is relevant for 
+                # confusion matrix. score is relevant for accuracy percentage. At least one should be True
+                load_and_predict(test, clf_name, use_score, use_predict)
 
-print '#' *50, '\n', 'test images - phase 1: {} seconds'.format(time.time() - tst_start_time)
-# ============================================================================================================================================= #
-# unpickle each image batch and save into lists
-# ============================================================================================================================================= #
-batch_start_time = time.time()
+    elif in == 3:
+        print 'Bye Bye!\n'
+        return
 
-relevant_sized_descriptors = []
-relevant_labels = []
-
-for data in data_batch:
-    d = unpickle(data)
-
-    images = d.values()[0][:N]
-    labels = d.values()[1][:N]
-    
-    for im,lb in zip(images, labels):
-        im = img_2_RGB(im)
-        kp,ds = sift.compute(im, tst_kp)
-        relevant_sized_descriptors.append(ds.flatten())
-        relevant_labels.append(lb)
-
-print '#' *50, '\n', 'training images - phase 2: {} seconds'.format(time.time() - batch_start_time)
-# ============================================================================================================================================= #
-# prepare data for classification
-# create classifier
-# fit data
-# pickle
-# ============================================================================================================================================= #
-fit_start_time = time.time()
-
-X = np.array(relevant_sized_descriptors)
-training_size = len(X)
-y = np.array(relevant_labels)
-
-# after many tests, this was found to be best classifier
-clf = SVC(C = 0.01, kernel='poly')
-clf.fit(X,y)
-
-# save classifier to file
-pickle_start_time = time.time()
-cPickle.dump(clf, open(clf_name, "wb" ),  protocol = cPickle.HIGHEST_PROTOCOL) 
-pickle_end_time = time.time()
-
-print '#' *50, '\n', 'fitting - phase 3: {} seconds (pickling took {})'.format(time.time() - fit_start_time, pickle_end_time - pickle_start_time)
-# ============================================================================================================================================= #      
-# clean-up
-# ============================================================================================================================================= #      
-clean_start_time = time.time()
-
-del relevant_sized_descriptors
-del relevant_labels
-del X
-del y
-del d
-del clf
-del images
-del labels
-del sift
-
-print '#' *50, '\n', 'clean up - phase 4: {} seconds '.format(time.time() - clean_start_time)
-# ============================================================================================================================================= #      
-# load and predict
-# ============================================================================================================================================= #
-prediction_start_time = time.time()
-confusion_matrix = load_and_predict(clf_name, tst_X, tst_relevant_labels)
-
-del tst_X
-del tst_relevant_labels
-print '#' *50, '\n', 'prediction: {} seconds '.format(time.time() - prediction_start_time)
-# ============================================================================================================================================= #      
-# end :-)
-# ============================================================================================================================================= #
-print('\a')
-print 'Done!\n\n'
-print '#' *50, '\n', 'total: {} seconds '.format(time.time() - start_time)
-print confusion_matrix
+if __name__ == '__main__':
+    main()
