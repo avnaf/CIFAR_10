@@ -1,0 +1,4 @@
+# download the data set from CIFAR_10 site
+# extract into a folder
+# change paths inside code
+# create classifier [option 1] & predict [option 2] (can pick other key-point methods - options inside "find_good_kp()")
