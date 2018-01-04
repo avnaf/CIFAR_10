@@ -5,6 +5,7 @@ import numpy as np
 import time
 import cPickle
 from sklearn.svm import SVC 
+from sklearn.externals import joblib
 from sklearn.metrics import confusion_matrix
 # ============================================================================================================================================= #
 N = 10000
@@ -57,7 +58,7 @@ def show_img(i, heading = '', delay = 1000):
 # ============================================================================================================================================= #
 # finds good key-points for the classifier using one of many hueristics
 # ============================================================================================================================================= #
-def find_good_kp(test_imgs_path, hueristic = 'richest image from problematic classes 4 & 6'):
+def find_good_kp(test_imgs_path, hueristic = 'richest images from problematic classes 4 & 6 + richest'):
     #print num_of_test_images
     d = unpickle(test_imgs_path)    
     images = d.values()[0]
@@ -84,18 +85,50 @@ def find_good_kp(test_imgs_path, hueristic = 'richest image from problematic cla
         good_kp = [cv2.KeyPoint(w,h,size) for w in range(margin, W - margin, step) for h in range(margin, H - margin, step)]
      
     # find best image (with most KP), and use it
-    if hueristic == 'richest image from problematic classes 4 & 6':
-        max_kp = [0,0]
+    if hueristic == 'richest images from problematic classes 4 & 6':
+        good_kp = []
+        max_kp_num = [0 for i in range(10)]
+        tmp_kp = [[] for i in range(10)]
+              
         for enum_pair in enumerate(zip(images,labels)):
             img = img_2_RGB(enum_pair[1][0])
             lbl = enum_pair[1][1]
-            if lbl not in [3,5]: # problematic classes as discovered by my last runs
+            if lbl not in (3,5): # problematic classes as discovered by my last runs
                 continue
             kp = sift.detect(img, None)
-            if len(kp) > max_kp[0 if lbl == 3 else 1]:
-                max_kp[0 if lbl == 3 else 1] = len(kp)
-                good_kp[0 if lbl == 3 else 1] = kp
-        good_kp = good_kp[0].append(good_kp[1])
+            if len(kp) > max_kp_num[lbl]:
+                max_kp_num[lbl] = len(kp)
+                tmp_kp[lbl] = kp
+
+        good_kp = tmp_kp[3] + tmp_kp[5]
+        
+    # find best image (with most KP), and use it
+    if hueristic == 'richest images from problematic classes 4 & 6 + richest':
+        good_kp = []
+        max_kp_num = [0 for i in range(10)]
+        tmp_kp = [[] for i in range(10)]
+              
+        for enum_pair in enumerate(zip(images,labels)):
+            img = img_2_RGB(enum_pair[1][0])
+            lbl = enum_pair[1][1]
+            if lbl not in (3,5): # problematic classes as discovered by my last runs
+                continue
+            kp = sift.detect(img, None)
+            if len(kp) > max_kp_num[lbl]:
+                max_kp_num[lbl] = len(kp)
+                tmp_kp[lbl] = kp
+
+        good_kp = tmp_kp[3] + tmp_kp[5]
+        
+        used_code_pls_replace_max_kp = []
+        max_kp = 0
+        for im in enumerate(images):
+            img = img_2_RGB(im[1])
+            kp = sift.detect(img, None)
+            if len(kp) > max_kp:
+                max_kp = len(kp)
+                used_code_pls_replace_max_kp = kp
+        good_kp = used_code_pls_replace_max_kp + tmp_kp[3] + tmp_kp[5]
         
     # takes much longer time with no significant improvement. Not used            
 #    elif hueristic == 'several good images':  
@@ -166,8 +199,10 @@ def train_clf(X,y,clf_name):
     # after many tests, this was found to be best classifier
     clf = SVC(C = 0.01, kernel='poly')
     clf.fit(X,y)
-    with open(clf_name, "wb" ) as fo:
-        cPickle.dump(clf, fo,  protocol = cPickle.HIGHEST_PROTOCOL) 
+    print 'fit done... {} seconds'.format(time.time() - start_time)
+    with open(clf_name, "wb") as fo:
+        joblib.dump(clf, fo, compress = 0) 
+#        cPickle.dump(clf, fo,  protocol = cPickle.HIGHEST_PROTOCOL) 
     return time.time() - start_time
 
 # ============================================================================================================================================= #      
@@ -202,7 +237,7 @@ def load_and_predict(test, clf_name, use_score = False, use_predict = False):
     print 'sift created... {} seconds'.format(sift_time - start_time)
     kp, kp_time = find_good_kp(test_imgs_path = test), time.time()
     with open(clf_name, 'rb') as fo:
-         clf, load_time = cPickle.load(fo), time.time()
+         clf, load_time = joblib.load(fo) , time.time()
          print 'classifier loaded... {} seconds'.format(load_time - kp_time)
          X,y,descriptors_time = img_2_descriptors(sift, kp, test)
          print 'descriptors generated... {} seconds'.format(descriptors_time)
@@ -225,7 +260,7 @@ def main():
     data_5 = batch_dir + r'\data_batch_5'
     data_batch = [data_1, data_2, data_3, data_4, data_5]
     test = batch_dir + r'\test_batch'
-    clf_name = project_dir + r'\clf_rich_img_try_2'
+    clf_name = project_dir + r'\clf_classes_4_6_joblib_and_richest'
 
     inp = input('What would you like to do?\n1 --------- train classifier and save it\n2 --------- load classifier and predict test images\n3 --------- exit\n')
     
@@ -244,6 +279,7 @@ def main():
             elif inp == 'y' or inp == 'Y':
                 print '\n'
                 train_and_save(data_batch, clf_name, test)
+                break
 
     elif inp == 2:
         print '\nMake sure the paths for the test batch and the classifier are correct. If not, quit now, change the and re-launch\n'
@@ -277,6 +313,7 @@ def main():
                 # the function has both score & predict functions. Each takes ~1800 seconds. predict is relevant for 
                 # confusion matrix. score is relevant for accuracy percentage. At least one should be True
                 load_and_predict(test, clf_name, use_score, use_predict)
+                break
 
     elif inp == 3:
         print 'Bye Bye!\n'
