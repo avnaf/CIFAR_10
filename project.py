@@ -64,6 +64,7 @@ def find_good_kp(test_imgs_path, hueristic = 'richest images from problematic cl
     images = d.values()[0]
     labels = d.values()[1]
     sift = cv2.xfeatures2d.SIFT_create()
+    
     good_kp = []
     
     # find best image (with most KP), and use it
